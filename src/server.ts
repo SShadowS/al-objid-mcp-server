@@ -42,6 +42,9 @@ export class ALObjectIdServer {
   public configPersistence!: ConfigPersistence;
   public logger: Logger;
 
+  // Handler cache to avoid repeated dynamic imports
+  private handlerCache: Map<string, (args: Record<string, unknown>) => Promise<ToolCallResponse>> = new Map();
+
   // Workflow documentation resources
   private resources = {
     'mcp://workflows/workspace-setup': {
@@ -401,6 +404,7 @@ These work without prerequisites:
   /**
    * Dynamically loads and executes a handler based on the command name and license tier.
    * This replaces the large switch statement with dynamic module loading.
+   * Handlers are cached after first load to improve performance.
    *
    * @param name - The command/tool name to handle
    * @param args - The arguments passed to the handler
@@ -411,28 +415,42 @@ These work without prerequisites:
       // Get the license tier from environment (same as toolFilter.ts uses)
       const mode = process.env.MCP_MODE?.toLowerCase();
       const tier = mode === 'lite' ? 'lite' : 'full';
-      const handlerConfig = getHandlerConfig(name, tier);
 
-      if (!handlerConfig) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Command "${name}" is not available in ${tier} tier`
-            }
-          ],
-          isError: true
-        };
-      }
+      // Create cache key that includes tier to handle tier changes
+      const cacheKey = `${tier}:${name}`;
 
-      // Dynamically import the handler module
-      const handlerModule = await import(handlerConfig.path);
+      // Check if handler is already cached
+      let handler = this.handlerCache.get(cacheKey);
 
-      // Get the handler function from the module
-      const handler = handlerModule[handlerConfig.handler];
+      if (!handler) {
+        // Handler not cached, need to load it
+        const handlerConfig = getHandlerConfig(name, tier);
 
-      if (typeof handler !== 'function') {
-        throw new Error(`Handler "${handlerConfig.handler}" not found in module ${handlerConfig.path}`);
+        if (!handlerConfig) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Command "${name}" is not available in ${tier} tier`
+              }
+            ],
+            isError: true
+          };
+        }
+
+        // Dynamically import the handler module
+        const handlerModule = await import(handlerConfig.path);
+
+        // Get the handler function from the module
+        handler = handlerModule[handlerConfig.handler];
+
+        if (typeof handler !== 'function') {
+          throw new Error(`Handler "${handlerConfig.handler}" not found in module ${handlerConfig.path}`);
+        }
+
+        // Cache the handler for future use
+        this.handlerCache.set(cacheKey, handler);
+        this.logger.debug(`Cached handler for ${name} in ${tier} tier`);
       }
 
       // Execute the handler with the server context (this) and arguments
@@ -456,6 +474,35 @@ These work without prerequisites:
   // Handler implementations are now loaded dynamically
   // All handler methods have been moved to separate files in handlers/full/ and handlers/standard/
   // They are loaded on demand by handleToolCallDynamic based on command name and license tier
+
+  /**
+   * Clears the handler cache. Useful for testing or if handlers need to be reloaded.
+   * @param name Optional - clear only a specific handler from cache
+   */
+  public clearHandlerCache(name?: string): void {
+    if (name) {
+      // Clear specific handler for all tiers
+      this.handlerCache.delete(`lite:${name}`);
+      this.handlerCache.delete(`full:${name}`);
+      this.handlerCache.delete(`standard:${name}`);
+      this.logger.debug(`Cleared handler cache for ${name}`);
+    } else {
+      // Clear all cached handlers
+      const size = this.handlerCache.size;
+      this.handlerCache.clear();
+      this.logger.debug(`Cleared all ${size} cached handlers`);
+    }
+  }
+
+  /**
+   * Gets cache statistics for monitoring
+   */
+  public getHandlerCacheStats(): { size: number; handlers: string[] } {
+    return {
+      size: this.handlerCache.size,
+      handlers: Array.from(this.handlerCache.keys())
+    };
+  }
 
   async run(): Promise<void> {
     const transport = new StdioServerTransport();
