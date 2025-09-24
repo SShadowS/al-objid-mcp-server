@@ -261,7 +261,12 @@ Each tool supports comprehensive error handling, logging, and integrates with th
 ```
 mcp-server/
 ├── src/
-│   ├── server.ts             # Main MCP server (25 tools implemented)
+│   ├── server.ts             # Core MCP server with dynamic handler loading (~500 lines)
+│   ├── commandMappings.ts    # Command registry mapping tools to handlers
+│   ├── handlers/             # Modular handler implementations
+│   │   ├── lite/            # Essential handlers (3 tools)
+│   │   ├── standard/        # Standard tier handlers
+│   │   └── full/            # Advanced feature handlers
 │   └── lib/                  # Core business logic
 │       ├── assignment/       # Interactive assignment features
 │       │   └── AssignmentManager.ts
@@ -281,14 +286,22 @@ mcp-server/
 │       └── workspace/        # Workspace and app management
 │           └── WorkspaceManager.ts
 ├── tests/
-│   └── integration/          # Live backend integration tests
-│       └── backend-live.test.ts
+│   └── integration/          # Integration tests
+│       ├── backend-live.test.ts
+│       └── dynamic-handlers.test.ts
 ├── test-backend-live.ts      # Standalone test runner
 ├── dist/                     # Compiled JavaScript output
 ├── package.json              # npm configuration with test scripts
 ├── tsconfig.json             # TypeScript configuration (strict mode)
 └── README.md
 ```
+
+### Architecture Highlights
+
+- **Dynamic Handler Loading**: Handlers are loaded on-demand to optimize memory usage and startup time
+- **Handler Caching**: Once loaded, handlers are cached for subsequent calls
+- **Tier-Based Organization**: Handlers are organized by license tier (lite/standard/full)
+- **Minimal Core**: The server core is kept lean at ~500 lines, down from 1500+ lines
 
 ## 🧪 Testing & Quality Assurance
 
