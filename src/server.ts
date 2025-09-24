@@ -59,17 +59,17 @@ type ToolCallResponse = {
 
 import { getToolsForMode, isToolAvailable } from './tools/toolFilter';
 
-class ALObjectIdServer {
+export class ALObjectIdServer {
   private server: Server;
-  private backend: BackendService;
-  private config: ConfigManager;
-  private workspace: WorkspaceManager;
-  private collision: CollisionDetector;
-  private field: FieldManager;
-  private polling: PollingService;
-  private assignment: AssignmentManager;
-  private persistence: ConfigPersistence;
-  private logger: Logger;
+  public backendService!: BackendService;
+  public configManager!: ConfigManager;
+  public workspaceManager!: WorkspaceManager;
+  public collisionDetector!: CollisionDetector;
+  public fieldManager!: FieldManager;
+  public pollingManager!: PollingService;
+  public assignmentManager!: AssignmentManager;
+  public configPersistence!: ConfigPersistence;
+  public logger: Logger;
 
   // Workflow documentation resources
   // Workflow documentation resources
@@ -272,14 +272,14 @@ These work without prerequisites:
       }
     });
 
-    this.config = ConfigManager.getInstance();
-    this.workspace = WorkspaceManager.getInstance();
-    this.backend = new BackendService();  // BackendService doesn't use singleton pattern
-    this.collision = CollisionDetector.getInstance();
-    this.field = FieldManager.getInstance();
-    this.polling = PollingService.getInstance();
-    this.assignment = AssignmentManager.getInstance();
-    this.persistence = ConfigPersistence.getInstance();
+    this.configManager = ConfigManager.getInstance();
+    this.workspaceManager = WorkspaceManager.getInstance();
+    this.backendService = new BackendService();  // BackendService doesn't use singleton pattern
+    this.collisionDetector = CollisionDetector.getInstance();
+    this.fieldManager = FieldManager.getInstance();
+    this.pollingManager = PollingService.getInstance();
+    this.assignmentManager = AssignmentManager.getInstance();
+    this.configPersistence = ConfigPersistence.getInstance();
     this.logger = Logger.getInstance();
 
     // Log the server mode
@@ -453,7 +453,7 @@ These work without prerequisites:
 
   private setupPolling(): void {
     // Set up polling event listeners
-    this.polling.on('update', (event) => {
+    this.pollingManager.on('update', (event) => {
       this.logger.info('Polling update received', event);
       // Could notify through MCP if there was a notification mechanism
     });
@@ -462,15 +462,15 @@ These work without prerequisites:
   private restoreConfiguration(): void {
     try {
       // Restore polling configuration
-      const pollingConfig = this.persistence.getPollingConfig();
+      const pollingConfig = this.configPersistence.getPollingConfig();
       if (pollingConfig.enabled) {
-        this.polling.start(pollingConfig);
+        this.pollingManager.start(pollingConfig);
       }
 
       // Restore preferences
-      const preferences = this.persistence.getPreferences();
+      const preferences = this.configPersistence.getPreferences();
       if (preferences.logLevel) {
-        this.logger.setLevel(preferences.logLevel as any);
+        this.logger.setLevel(preferences.logLevel as 'debug' | 'info' | 'warn' | 'error');
       }
 
       this.logger.info('Configuration restored from persistence');
@@ -480,10 +480,10 @@ These work without prerequisites:
   }
 
   // Helper method to get app from path
-  private async getAppFromPath(appPath?: string): Promise<WorkspaceApp | null> {
+  public async getAppFromPath(appPath?: string): Promise<WorkspaceApp | null> {
     if (!appPath) {
       // Try to get active app
-      const workspace = this.workspace.getCurrentWorkspace();
+      const workspace = this.workspaceManager.getCurrentWorkspace();
       if (workspace?.activeApp) {
         return workspace.activeApp;
       }
@@ -491,11 +491,11 @@ These work without prerequisites:
     }
 
     // Try to find app by path
-    let app = this.workspace.getAppByPath(appPath);
+    let app = this.workspaceManager.getAppByPath(appPath);
     
     if (!app) {
       // Try scanning if not found
-      const workspace = await this.workspace.scanWorkspace(appPath);
+      const workspace = await this.workspaceManager.scanWorkspace(appPath);
       if (workspace.apps.length > 0) {
         app = workspace.apps[0];
       }
@@ -545,7 +545,7 @@ These work without prerequisites:
 
       if (args.objectType === 'field' || args.objectType === 'table') {
         // Get field ID
-        const fieldId = await this.field.getNextFieldId(
+        const fieldId = await this.fieldManager.getNextFieldId(
           app.appId,
           app.authKey,
           args.parentObjectId,
@@ -567,7 +567,7 @@ These work without prerequisites:
         }
       } else if (args.objectType === 'enum') {
         // Get enum value ID
-        const enumValueId = await this.field.getNextEnumValueId(
+        const enumValueId = await this.fieldManager.getNextEnumValueId(
           app.appId,
           app.authKey,
           args.parentObjectId,
@@ -595,7 +595,7 @@ These work without prerequisites:
     const ranges = args.ranges || app.ranges || DEFAULT_EXTENSION_RANGES;
 
     // Use pool ID if available (matches VSCode extension behavior)
-    const appId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+    const appId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
 
     const request = {
       appId,
@@ -606,14 +606,14 @@ These work without prerequisites:
     };
 
     // Query without committing (GET request)
-    const result = await this.backend.getNext(request, false);
+    const result = await this.backendService.getNext(request, false);
 
     if (result && result.available) {
       // Handle both single ID and array of IDs
       const id = Array.isArray(result.id) ? result.id[0] : result.id;
 
       // Check for collisions
-      const collision = await this.collision.checkCollision(objectType, id, app);
+      const collision = await this.collisionDetector.checkCollision(objectType, id, app);
 
       if (collision) {
         return {
@@ -678,7 +678,7 @@ These work without prerequisites:
 
       if (args.objectType === 'field' || args.objectType === 'table') {
         // Reserve field ID
-        const success = await this.field.reserveFieldId(
+        const success = await this.fieldManager.reserveFieldId(
           app.appId,
           app.authKey,
           args.parentObjectId,
@@ -689,8 +689,8 @@ These work without prerequisites:
         if (success) {
           // Use storeAssignment for real-time tracking without overwriting consumption
           const objectType = `table_${args.parentObjectId}`;
-          const poolId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
-          await this.backend.storeAssignment(
+          const poolId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
+          await this.backendService.storeAssignment(
             poolId,
             app.authKey,
             objectType,
@@ -715,7 +715,7 @@ These work without prerequisites:
         }
       } else if (args.objectType === 'enum') {
         // Reserve enum value
-        const success = await this.field.reserveEnumValueId(
+        const success = await this.fieldManager.reserveEnumValueId(
           app.appId,
           app.authKey,
           args.parentObjectId,
@@ -726,8 +726,8 @@ These work without prerequisites:
         if (success) {
           // Use storeAssignment for real-time tracking without overwriting consumption
           const objectType = `enum_${args.parentObjectId}`;
-          const poolId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
-          await this.backend.storeAssignment(
+          const poolId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
+          await this.backendService.storeAssignment(
             poolId,
             app.authKey,
             objectType,
@@ -756,7 +756,7 @@ These work without prerequisites:
     // Standard object ID reservation
     const objectType = args.objectType as ALObjectType;
     const ranges = app.ranges || DEFAULT_EXTENSION_RANGES;
-    const appId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+    const appId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
 
     // Validate ID is within allowed ranges
     const inRange = ranges.some(r => args.id >= r.from && args.id <= r.to);
@@ -780,7 +780,7 @@ These work without prerequisites:
     };
 
     // Commit the reservation (POST request)
-    const result = await this.backend.getNext(request, true);
+    const result = await this.backendService.getNext(request, true);
 
     if (result && result.available) {
       const reservedId = Array.isArray(result.id) ? result.id[0] : result.id;
@@ -788,7 +788,7 @@ These work without prerequisites:
       if (reservedId === args.id) {
         // Successfully reserved the requested ID
         // Track the assignment
-        await this.assignment.assignIds(app, {
+        await this.assignmentManager.assignIds(app, {
           objectType,
           count: 1,
           description: `Reserved ${objectType} ID ${args.id}`
@@ -857,7 +857,7 @@ These work without prerequisites:
     }
 
     // Use pool ID if available (matches VSCode extension behavior)
-    const appId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+    const appId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
 
     // For now, use simplified authorization (Phase 4 will add full git integration)
     const request = {
@@ -869,16 +869,16 @@ These work without prerequisites:
       gitBranch: 'main'
     };
 
-    const result = await this.backend.authorizeApp(request);
+    const result = await this.backendService.authorizeApp(request);
 
     if (result) {
       // Update workspace manager with the result auth key
-      this.workspace.updateAppAuthorization(app.path, result.authKey);
+      this.workspaceManager.updateAppAuthorization(app.path, result.authKey);
       
       // Save to persistence
-      const workspace = this.workspace.getCurrentWorkspace();
+      const workspace = this.workspaceManager.getCurrentWorkspace();
       if (workspace) {
-        this.persistence.saveWorkspace(
+        this.configPersistence.saveWorkspace(
           workspace.rootPath,
           workspace.apps,
           workspace.activeApp?.appId
@@ -916,12 +916,12 @@ These work without prerequisites:
     }
 
     // Use pool ID if available (matches VSCode extension behavior)
-    const appId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+    const appId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
     
     // Support sync modes: merge (UPDATE/PATCH) or replace (REPLACE/POST)
     const merge = args.merge === true || args.mode === 'UPDATE' || args.mode === 'merge';
     
-    const result = await this.backend.syncIds({
+    const result = await this.backendService.syncIds({
       appId,
       authKey: app.authKey,
       ids: args.ids,
@@ -932,7 +932,7 @@ These work without prerequisites:
       // Record in persistence
       for (const [objectType, ids] of Object.entries(args.ids)) {
         if (Array.isArray(ids)) {
-          this.persistence.addAssignmentHistory(
+          this.configPersistence.addAssignmentHistory(
             app.appId,
             objectType,
             ids,
@@ -984,12 +984,12 @@ These work without prerequisites:
     const report: Record<string, number[]> = {};
 
     // Get all consumption at once using pool ID if available (matches VSCode extension behavior)
-    const appId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+    const appId = this.workspaceManager.getPoolIdFromAppIdIfAvailable(app.appId);
     const request = {
       appId,
       authKey: app.authKey
     };
-    const consumptionInfo = await this.backend.getConsumption(request);
+    const consumptionInfo = await this.backendService.getConsumption(request);
 
     if (consumptionInfo) {
       for (const objectType of objectTypes) {
@@ -1013,10 +1013,10 @@ These work without prerequisites:
   }
 
   private async handleScanWorkspace(args: ScanWorkspaceArgs): Promise<ToolCallResponse> {
-    const workspace = await this.workspace.scanWorkspace(args.workspacePath);
+    const workspace = await this.workspaceManager.scanWorkspace(args.workspacePath);
 
     // Save to persistence
-    this.persistence.saveWorkspace(
+    this.configPersistence.saveWorkspace(
       workspace.rootPath,
       workspace.apps,
       workspace.activeApp?.appId
@@ -1035,7 +1035,7 @@ These work without prerequisites:
   }
 
   private async handleGetWorkspaceInfo(_args: GetWorkspaceInfoArgs): Promise<ToolCallResponse> {
-    const workspace = this.workspace.getCurrentWorkspace();
+    const workspace = this.workspaceManager.getCurrentWorkspace();
     
     if (!workspace) {
       return {
@@ -1065,13 +1065,13 @@ These work without prerequisites:
   }
 
   private async handleSetActiveApp(args: SetActiveAppArgs): Promise<ToolCallResponse> {
-    const success = this.workspace.setActiveApp(args.appPath || '');
+    const success = this.workspaceManager.setActiveApp(args.appPath || '');
 
     if (success) {
-      const workspace = this.workspace.getCurrentWorkspace();
+      const workspace = this.workspaceManager.getCurrentWorkspace();
       if (workspace) {
         // Save to persistence
-        this.persistence.saveWorkspace(
+        this.configPersistence.saveWorkspace(
           workspace.rootPath,
           workspace.apps,
           workspace.activeApp?.appId
@@ -1109,7 +1109,7 @@ These work without prerequisites:
     }
 
     const ranges = app.ranges || DEFAULT_EXTENSION_RANGES;
-    const fieldId = await this.field.getNextFieldId(
+    const fieldId = await this.fieldManager.getNextFieldId(
       app.appId,
       app.authKey,
       args.tableId,
@@ -1148,7 +1148,7 @@ These work without prerequisites:
     }
 
     const ranges = app.ranges || DEFAULT_EXTENSION_RANGES;
-    const valueId = await this.field.getNextEnumValueId(
+    const valueId = await this.fieldManager.getNextEnumValueId(
       app.appId,
       app.authKey,
       args.enumId,
@@ -1179,7 +1179,7 @@ These work without prerequisites:
       };
     }
 
-    const collision = await this.collision.checkCollision(
+    const collision = await this.collisionDetector.checkCollision(
       args.objectType as ALObjectType,
       args.id,
       app
@@ -1207,7 +1207,7 @@ These work without prerequisites:
   }
 
   private async handleCheckRangeOverlaps(_args: CheckRangeOverlapsArgs): Promise<ToolCallResponse> {
-    const overlaps = await this.collision.checkRangeOverlaps();
+    const overlaps = await this.collisionDetector.checkRangeOverlaps();
 
     if (overlaps.length === 0) {
       return {
@@ -1239,10 +1239,10 @@ These work without prerequisites:
       checkPools: args.features?.pools || false
     };
 
-    this.polling.start(config);
+    this.pollingManager.start(config);
 
     // Save to persistence
-    this.persistence.savePollingConfig(config);
+    this.configPersistence.savePollingConfig(config);
 
     return {
       content: [{
@@ -1253,12 +1253,12 @@ These work without prerequisites:
   }
 
   private async handleStopPolling(_args: StopPollingArgs): Promise<ToolCallResponse> {
-    this.polling.stop();
+    this.pollingManager.stop();
 
     // Update persistence
-    const config = this.persistence.getPollingConfig();
+    const config = this.configPersistence.getPollingConfig();
     config.enabled = false;
-    this.persistence.savePollingConfig(config);
+    this.configPersistence.savePollingConfig(config);
 
     return {
       content: [{
@@ -1269,7 +1269,7 @@ These work without prerequisites:
   }
 
   private async handleGetPollingStatus(_args: GetPollingStatusArgs): Promise<ToolCallResponse> {
-    const status = this.polling.getStatus();
+    const status = this.pollingManager.getStatus();
 
     return {
       content: [{
@@ -1290,7 +1290,7 @@ These work without prerequisites:
       };
     }
 
-    const result = await this.assignment.assignIds(app, {
+    const result = await this.assignmentManager.assignIds(app, {
       objectType: args.objectType as ALObjectType,
       count: args.count,
       ranges: args.ranges,
@@ -1301,7 +1301,7 @@ These work without prerequisites:
 
     if (result.success) {
       // Save to persistence
-      this.persistence.addAssignmentHistory(
+      this.configPersistence.addAssignmentHistory(
         app.appId,
         args.objectType,
         result.ids,
@@ -1338,7 +1338,7 @@ These work without prerequisites:
       };
     }
 
-    const results = await this.assignment.batchAssign(app, args.assignments.map(a => ({
+    const results = await this.assignmentManager.batchAssign(app, args.assignments.map(a => ({
       ...a,
       objectType: a.objectType as ALObjectType
     })));
@@ -1366,7 +1366,7 @@ These work without prerequisites:
       };
     }
 
-    const success = await this.assignment.reserveRange(
+    const success = await this.assignmentManager.reserveRange(
       app,
       args.objectType as ALObjectType,
       args.from,
@@ -1399,7 +1399,7 @@ These work without prerequisites:
       };
     }
 
-    const suggestions = await this.assignment.getSuggestions(
+    const suggestions = await this.assignmentManager.getSuggestions(
       app,
       args.objectType as ALObjectType,
       args.pattern
@@ -1437,8 +1437,8 @@ These work without prerequisites:
     const app = args.appPath ? await this.getAppFromPath(args.appPath) : undefined;
 
     // Get from both assignment manager and persistence
-    const history = this.assignment.getHistory(app || undefined, args.objectType as ALObjectType | undefined, args.limit);
-    const persistedHistory = this.persistence.getAssignmentHistory(
+    const history = this.assignmentManager.getHistory(app || undefined, args.objectType as ALObjectType | undefined, args.limit);
+    const persistedHistory = this.configPersistence.getAssignmentHistory(
       app?.appId,
       args.objectType,
       args.limit
@@ -1481,7 +1481,7 @@ These work without prerequisites:
   // Configuration Management handlers
 
   private async handleSavePreferences(args: SavePreferencesArgs): Promise<ToolCallResponse> {
-    this.persistence.savePreferences(args.preferences);
+    this.configPersistence.savePreferences(args.preferences);
 
     // Apply preferences
     if (args.preferences.logLevel) {
@@ -1497,7 +1497,7 @@ These work without prerequisites:
   }
 
   private async handleGetPreferences(_args: GetPreferencesArgs): Promise<ToolCallResponse> {
-    const preferences = this.persistence.getPreferences();
+    const preferences = this.configPersistence.getPreferences();
 
     return {
       content: [{
@@ -1508,7 +1508,7 @@ These work without prerequisites:
   }
 
   private async handleExportConfig(_args: ExportConfigArgs): Promise<ToolCallResponse> {
-    const config = this.persistence.exportConfig();
+    const config = this.configPersistence.exportConfig();
 
     return {
       content: [{
@@ -1519,7 +1519,7 @@ These work without prerequisites:
   }
 
   private async handleImportConfig(args: ImportConfigArgs): Promise<ToolCallResponse> {
-    const success = this.persistence.importConfig(args.config);
+    const success = this.configPersistence.importConfig(args.config);
 
     if (success) {
       // Restore configuration
@@ -1540,12 +1540,12 @@ These work without prerequisites:
   }
 
   private async handleGetStatistics(_args: GetStatisticsArgs): Promise<ToolCallResponse> {
-    const stats = this.persistence.getStatistics();
+    const stats = this.configPersistence.getStatistics();
 
-    const workspace = this.workspace.getCurrentWorkspace();
+    const workspace = this.workspaceManager.getCurrentWorkspace();
     const assignmentStats = {
-      pendingAssignments: this.assignment.getPendingAssignments().size,
-      sessionHistory: this.assignment.getHistory().length
+      pendingAssignments: this.assignmentManager.getPendingAssignments().size,
+      sessionHistory: this.assignmentManager.getHistory().length
     };
 
     const combined = {
@@ -1574,7 +1574,7 @@ These work without prerequisites:
 
     // Ensure configuration is saved on exit
     process.on('SIGINT', () => {
-      this.persistence.forceSave();
+      this.configPersistence.forceSave();
       process.exit(0);
     });
   }

@@ -5,12 +5,36 @@ import { WorkspaceManager, WorkspaceApp } from '../workspace/WorkspaceManager';
 import { CollisionDetector } from '../collision/CollisionDetector';
 import { ALObjectType } from '../types/ALObjectType';
 
-export interface UpdateEvent {
-  type: 'consumption' | 'authorization' | 'collision' | 'pool';
+export type UpdateEvent = {
   appId: string;
-  data: any;
   timestamp: number;
-}
+} & (
+  | {
+      type: 'consumption';
+      data: {
+        objectType: string;
+        ids: number[];
+        count: number;
+        previousCount: number;
+      };
+    }
+  | {
+      type: 'collision';
+      data: {
+        collisions: Array<unknown>;
+        count: number;
+      };
+    }
+  | {
+      type: 'pool';
+      poolId?: string;
+      message?: string;
+    }
+  | {
+      type: 'authorization';
+      data: Record<string, unknown>;
+    }
+);
 
 export interface PollingConfig {
   enabled: boolean;
@@ -171,7 +195,7 @@ export class PollingService extends EventEmitter {
 
       const request = {
         appId,
-        authKey: app.authKey!
+        authKey: app.authKey || ''
       };
 
       const consumptionInfo = await this.backendService.getConsumption(request);
@@ -275,8 +299,9 @@ export class PollingService extends EventEmitter {
             type: 'pool',
             appId: app.appId,
             poolId: checkResult.poolId,
-            message: `App joined pool: ${checkResult.poolId}`
-          });
+            message: `App joined pool: ${checkResult.poolId}`,
+            timestamp: Date.now()
+          } as UpdateEvent);
 
           this.lastPoolIds.set(cacheKey, poolIdStr);
         }

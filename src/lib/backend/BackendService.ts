@@ -7,7 +7,7 @@ import { NextObjectIdInfo } from '../types/NextObjectIdInfo';
 import { AuthorizationInfo } from '../types/AuthorizationInfo';
 import { ConsumptionInfo } from '../types/ConsumptionInfo';
 import { ALRanges } from '../types/ALRange';
-import { LoggableData, PoolCreationResponse, PoolJoinResponse } from '../types';
+import { LoggableData, PoolCreationResponse, PoolJoinResponse, AutoSyncResponse, UpdateCheckResponse } from '../types';
 
 export interface CheckAppResponse {
   managed: boolean;
@@ -112,7 +112,7 @@ export class BackendService {
       headers: backend.key ? {
         'X-Functions-Key': backend.key
       } : undefined,
-      data
+      data: data as Record<string, unknown> | undefined
     };
 
     const fullUrl = `${protocol}//${hostname}${path}`;
@@ -150,7 +150,7 @@ export class BackendService {
       return response.value as T;
     } catch (error) {
       this.logger.error(`Request failed: ${method} ${fullUrl}`, error);
-      ErrorHandler.handle(error);
+      ErrorHandler.handle(error as Error);
     }
   }
 
@@ -408,9 +408,9 @@ export class BackendService {
       ids: ConsumptionInfo;
     }>,
     patch = false
-  ): Promise<any> {
+  ): Promise<AutoSyncResponse> {
     try {
-      const response = await this.sendRequest<any>(
+      const response = await this.sendRequest<AutoSyncResponse>(
         '/api/v2/autoSyncIds',
         patch ? 'PATCH' : 'POST',
         { appFolders }
@@ -419,7 +419,7 @@ export class BackendService {
       return response;
     } catch (error) {
       this.logger.error('Failed to auto-sync IDs', error);
-      return null;
+      return { success: false };
     }
   }
 
@@ -507,7 +507,7 @@ export class BackendService {
             total += response[key].length;
           }
         }
-        (response as any)._total = total;
+        (response as ConsumptionInfo & { _total?: number })._total = total;
       }
 
       return response;
@@ -521,9 +521,9 @@ export class BackendService {
   /**
    * Check for updates (polling endpoint)
    */
-  async checkUpdate(request: CheckUpdateRequest): Promise<any> {
+  async checkUpdate(request: CheckUpdateRequest): Promise<UpdateCheckResponse | undefined> {
     try {
-      const response = await this.sendRequest<any>(
+      const response = await this.sendRequest<UpdateCheckResponse>(
         `/api/v2/check?appId=${encodeURIComponent(request.appId)}&lastCheck=${request.lastCheck}`,
         'GET',
         undefined,
@@ -532,7 +532,7 @@ export class BackendService {
       return response;
     } catch (error) {
       this.logger.error(`Failed to check updates for app ${request.appId}`, error);
-      return null;
+      return undefined;
     }
   }
 

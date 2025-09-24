@@ -141,33 +141,35 @@ export class ConfigPersistence {
   /**
    * Check if configuration needs migration
    */
-  private needsMigration(config: any): boolean {
-    return !config.version || config.version < '1.0.0';
+  private needsMigration(config: unknown): boolean {
+    const cfg = config as { version?: string };
+    return !cfg.version || cfg.version < '1.0.0';
   }
 
   /**
    * Migrate configuration to current version
    */
-  private migrateConfig(oldConfig: any): PersistedConfig {
+  private migrateConfig(oldConfig: unknown): PersistedConfig {
     this.logger.info('Migrating configuration to current version');
 
     const newConfig = this.getDefaultConfig();
+    const old = oldConfig as Partial<PersistedConfig>;
 
     // Preserve any existing data that's still valid
-    if (oldConfig.workspaces) {
-      newConfig.workspaces = oldConfig.workspaces;
+    if (old.workspaces) {
+      newConfig.workspaces = old.workspaces;
     }
 
-    if (oldConfig.polling) {
-      Object.assign(newConfig.polling, oldConfig.polling);
+    if (old.polling) {
+      Object.assign(newConfig.polling, old.polling);
     }
 
-    if (oldConfig.assignments) {
-      Object.assign(newConfig.assignments, oldConfig.assignments);
+    if (old.assignments) {
+      Object.assign(newConfig.assignments, old.assignments);
     }
 
-    if (oldConfig.preferences) {
-      Object.assign(newConfig.preferences, oldConfig.preferences);
+    if (old.preferences) {
+      Object.assign(newConfig.preferences, old.preferences);
     }
 
     return newConfig;
