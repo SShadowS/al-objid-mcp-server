@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//u/Git/objid-mcp/vscode-extension/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
