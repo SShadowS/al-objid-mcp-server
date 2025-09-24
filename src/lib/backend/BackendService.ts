@@ -7,6 +7,7 @@ import { NextObjectIdInfo } from '../types/NextObjectIdInfo';
 import { AuthorizationInfo } from '../types/AuthorizationInfo';
 import { ConsumptionInfo } from '../types/ConsumptionInfo';
 import { ALRanges } from '../types/ALRange';
+import { LoggableData, PoolCreationResponse, PoolJoinResponse } from '../types';
 
 export interface CheckAppResponse {
   managed: boolean;
@@ -75,7 +76,7 @@ export class BackendService {
   private async sendRequest<T>(
     path: string,
     method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
-    data?: any,
+    data?: LoggableData,
     usePollBackend = false
   ): Promise<T> {
     const backend = usePollBackend
@@ -182,7 +183,54 @@ export class BackendService {
   }
 
   /**
-   * Get next available object ID(s)
+   * Get next available object ID(s) from the backend
+   *
+   * This method retrieves the next available ID(s) for a given object type.
+   * Can operate in preview mode (GET) or commit mode (POST).
+   *
+   * @param request - The request containing appId, type, ranges, and optional requirements
+   * @param commit - If true, commits the ID (POST). If false, just previews (GET)
+   * @returns Information about the next available ID(s), or undefined on error
+   *
+   * @remarks
+   * - GET method (commit=false) just returns the next available ID without reserving
+   * - POST method (commit=true) reserves the ID and marks it as consumed
+   * - When require is specified, attempts to reserve that specific ID
+   * - perRange flag affects how IDs are distributed across ranges
+   *
+   * @example
+   * ```typescript
+   * // Preview next available table ID
+   * const info = await backend.getNext({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   type: 'table',
+   *   ranges: [{ from: 50000, to: 50099 }]
+   * }, false);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Reserve specific ID 50005
+   * const info = await backend.getNext({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   type: 'table',
+   *   ranges: [{ from: 50000, to: 50099 }],
+   *   require: 50005
+   * }, true);
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Get and commit next codeunit ID
+   * const info = await backend.getNext({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   type: 'codeunit',
+   *   ranges: [{ from: 50000, to: 50099 }]
+   * }, true);
+   * ```
    */
   async getNext(
     request: GetNextRequest,
@@ -292,7 +340,46 @@ export class BackendService {
   }
 
   /**
-   * Synchronize consumed object IDs
+   * Synchronize consumed object IDs with the backend
+   *
+   * This method syncs the complete consumption state with the backend. Can operate in
+   * merge mode (default) to add to existing consumption, or replace mode to completely
+   * overwrite existing data.
+   *
+   * @param request - The sync request containing appId, authKey, ids, and merge flag
+   * @returns True if synchronization was successful, false otherwise
+   *
+   * @remarks
+   * - PATCH method is used for merge mode (adds to existing consumption)
+   * - POST method is used for replace mode (overwrites all consumption)
+   * - Default behavior is merge mode to prevent accidental data loss
+   * - For individual ID assignments, use storeAssignment instead
+   *
+   * @example
+   * ```typescript
+   * // Merge new IDs with existing consumption
+   * const success = await backend.syncIds({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   ids: { table: [50000, 50001], page: [50000] },
+   *   merge: true  // Default, adds to existing
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Replace all consumption (use with caution!)
+   * const success = await backend.syncIds({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   ids: { table: [50000, 50001] },
+   *   merge: false  // Replaces all existing consumption
+   * });
+   * ```
+   *
+   * @warning
+   * Using merge: false will completely replace all existing consumption data.
+   * This can lead to data loss if not used carefully.
    */
   async syncIds(request: SyncIdsRequest): Promise<boolean> {
     try {
@@ -337,7 +424,47 @@ export class BackendService {
   }
 
   /**
-   * Store a single ID assignment (POST to add, DELETE to remove)
+   * Stores or removes an individual ID assignment in the backend
+   *
+   * This method is used for real-time tracking of individual ID assignments without
+   * overwriting existing consumption data. It's particularly important for field and
+   * enum IDs to avoid data loss.
+   *
+   * @param appId - The application ID (SHA256 hash of app.json id field)
+   * @param authKey - The authorization key for the app
+   * @param type - The object type (e.g., 'table', 'codeunit', 'table_50000' for fields)
+   * @param id - The ID being assigned or removed
+   * @param method - 'POST' to add assignment, 'DELETE' to remove assignment
+   * @returns True if the assignment was successfully stored/removed, false otherwise
+   *
+   * @remarks
+   * For field IDs, the type should be 'table_${tableId}'
+   * For enum value IDs, the type should be 'enum_${enumId}'
+   * This method updates consumption incrementally without replacing existing data
+   *
+   * @example
+   * ```typescript
+   * // Store a field ID assignment for table 50000
+   * const success = await backend.storeAssignment(
+   *   appId,
+   *   authKey,
+   *   'table_50000',
+   *   15,
+   *   'POST'
+   * );
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Store an enum value assignment for enum 50200
+   * const success = await backend.storeAssignment(
+   *   appId,
+   *   authKey,
+   *   'enum_50200',
+   *   3,
+   *   'POST'
+   * );
+   * ```
    */
   async storeAssignment(
     appId: string,
@@ -416,11 +543,11 @@ export class BackendService {
     payload: Array<{
       appId: string;
       authKey?: string;
-      authorization: any;
+      authorization: unknown;
     }>
-  ): Promise<any> {
+  ): Promise<unknown> {
     try {
-      const response = await this.sendRequest<any>(
+      const response = await this.sendRequest<unknown>(
         '/api/v2/check',
         'GET',
         payload,
@@ -444,14 +571,14 @@ export class BackendService {
     managementSecret: string,
     apps?: Array<{ appId: string; name: string }>,
     allowAnyAppToManage = false
-  ): Promise<{ poolId: string; accessKey: string; validationKey: string; managementKey: string; leaveKeys: any } | undefined> {
+  ): Promise<PoolCreationResponse | undefined> {
     try {
       const response = await this.sendRequest<{
         poolId: string;
         accessKey: string;
         validationKey: string;
         managementKey: string;
-        leaveKeys: any;
+        leaveKeys: Record<string, string>;
       }>(
         '/api/v2/createPool',
         'POST',
@@ -477,9 +604,9 @@ export class BackendService {
     poolId: string,
     joinKey: string,
     apps: Array<{ appId: string; name: string }>
-  ): Promise<any> {
+  ): Promise<PoolJoinResponse | null> {
     try {
-      const response = await this.sendRequest<any>(
+      const response = await this.sendRequest<PoolJoinResponse>(
         '/api/v2/joinPool',
         'POST',
         { poolId, joinKey, apps }

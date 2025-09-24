@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Logger } from '../utils/Logger';
+import { AppJsonManifest, ObjIdConfigFile, RangeInput, ParsedRange } from '../types/WorkspaceTypes';
 
 export interface WorkspaceApp {
   path: string;
@@ -117,7 +118,7 @@ export class WorkspaceManager {
       // Load app.json
       const appJsonPath = path.join(appPath, 'app.json');
       const appJsonContent = await fs.promises.readFile(appJsonPath, 'utf-8');
-      const appJson = JSON.parse(appJsonContent);
+      const appJson = JSON.parse(appJsonContent) as AppJsonManifest;
 
       // Check for .objidconfig
       const objIdConfigPath = path.join(appPath, '.objidconfig');
@@ -136,7 +137,7 @@ export class WorkspaceManager {
           try {
             // Remove comments for JSON parsing
             const jsonContent = objIdConfigContent.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
-            const objIdConfig = JSON.parse(jsonContent);
+            const objIdConfig = JSON.parse(jsonContent) as ObjIdConfigFile;
 
             authKey = objIdConfig.authKey;
             appPoolId = objIdConfig.appPoolId;
@@ -188,8 +189,8 @@ export class WorkspaceManager {
   /**
    * Parse range strings into structured format
    */
-  private parseRanges(ranges: any): Array<{ from: number; to: number }> {
-    const result: Array<{ from: number; to: number }> = [];
+  private parseRanges(ranges: RangeInput[]): ParsedRange[] {
+    const result: ParsedRange[] = [];
 
     if (!Array.isArray(ranges)) {
       return result;
@@ -219,8 +220,8 @@ export class WorkspaceManager {
   /**
    * Extract ID ranges from app.json
    */
-  private extractRangesFromAppJson(appJson: any): Array<{ from: number; to: number }> {
-    const ranges: Array<{ from: number; to: number }> = [];
+  private extractRangesFromAppJson(appJson: AppJsonManifest): ParsedRange[] {
+    const ranges: ParsedRange[] = [];
 
     // Check for idRanges in app.json
     if (appJson.idRanges && Array.isArray(appJson.idRanges)) {

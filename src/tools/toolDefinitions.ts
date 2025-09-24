@@ -1,7 +1,20 @@
+/**
+ * JSON Schema type definition for tool inputs
+ */
+export interface JsonSchema {
+  type: string;
+  properties?: Record<string, unknown>;
+  required?: string[];
+  items?: unknown;
+  enum?: string[];
+  description?: string;
+  [key: string]: unknown;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
-  inputSchema: any;
+  inputSchema: JsonSchema;
   category: 'core' | 'workspace' | 'authorization' | 'field' | 'collision' | 'polling' | 'assignment' | 'config';
 }
 

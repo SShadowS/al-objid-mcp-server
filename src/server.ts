@@ -19,6 +19,34 @@ import { ConfigPersistence } from './lib/config/ConfigPersistence';
 import { Logger } from './lib/utils/Logger';
 import { ALObjectType } from './lib/types/ALObjectType';
 import { DEFAULT_EXTENSION_RANGES } from './lib/constants/ranges';
+import {
+  GetNextObjectIdArgs,
+  ReserveIdArgs,
+  SyncObjectIdsArgs,
+  AuthorizeAppArgs,
+  CheckAuthorizationArgs,
+  GetConsumptionReportArgs,
+  ScanWorkspaceArgs,
+  GetWorkspaceInfoArgs,
+  SetActiveAppArgs,
+  GetNextFieldIdArgs,
+  GetNextEnumValueIdArgs,
+  CheckCollisionArgs,
+  CheckRangeOverlapsArgs,
+  StartPollingArgs,
+  StopPollingArgs,
+  GetPollingStatusArgs,
+  AssignIdsArgs,
+  BatchAssignArgs,
+  ReserveRangeArgs,
+  GetSuggestionsArgs,
+  GetAssignmentHistoryArgs,
+  SavePreferencesArgs,
+  GetPreferencesArgs,
+  ExportConfigArgs,
+  ImportConfigArgs,
+  GetStatisticsArgs
+} from './lib/types/ToolHandlerArgs';
 
 // Define ToolCallResponse locally to match MCP SDK expectations
 type ToolCallResponse = {
@@ -302,71 +330,71 @@ These work without prerequisites:
           switch (name) {
             // Core ID Management
             case "get-next-id":
-              return await this.handleGetNextObjectId(args);
+              return await this.handleGetNextObjectId(args as unknown as GetNextObjectIdArgs);
             case "reserve-id":
-              return await this.handleReserveId(args);
+              return await this.handleReserveId(args as unknown as ReserveIdArgs);
             case "sync-object-ids":
-              return await this.handleSyncObjectIds(args);
+              return await this.handleSyncObjectIds(args as unknown as SyncObjectIdsArgs);
 
             // Authorization & Backend
             case "check-authorization":
-              return await this.handleCheckAuthorization(args);
+              return await this.handleCheckAuthorization(args as CheckAuthorizationArgs);
             case "authorize-app":
-              return await this.handleAuthorizeApp(args);
+              return await this.handleAuthorizeApp(args as AuthorizeAppArgs);
             case "get-consumption-report":
-              return await this.handleGetConsumptionReport(args);
+              return await this.handleGetConsumptionReport(args as GetConsumptionReportArgs);
 
             // Workspace Management
             case "scan-workspace":
-              return await this.handleScanWorkspace(args);
+              return await this.handleScanWorkspace(args as unknown as ScanWorkspaceArgs);
             case "get-workspace-info":
-              return await this.handleGetWorkspaceInfo(args);
+              return await this.handleGetWorkspaceInfo(args as GetWorkspaceInfoArgs);
             case "set-active-app":
-              return await this.handleSetActiveApp(args);
+              return await this.handleSetActiveApp(args as SetActiveAppArgs);
 
             // Field Management
             case "get-next-field-id":
-              return await this.handleGetNextFieldId(args);
+              return await this.handleGetNextFieldId(args as unknown as GetNextFieldIdArgs);
             case "get-next-enum-value-id":
-              return await this.handleGetNextEnumValueId(args);
+              return await this.handleGetNextEnumValueId(args as unknown as GetNextEnumValueIdArgs);
 
             // Collision Detection
             case "check-collision":
-              return await this.handleCheckCollision(args);
+              return await this.handleCheckCollision(args as unknown as CheckCollisionArgs);
             case "check-range-overlaps":
-              return await this.handleCheckRangeOverlaps(args);
+              return await this.handleCheckRangeOverlaps(args as CheckRangeOverlapsArgs);
 
             // Polling Management
             case "start-polling":
-              return await this.handleStartPolling(args);
+              return await this.handleStartPolling(args as StartPollingArgs);
             case "stop-polling":
-              return await this.handleStopPolling(args);
+              return await this.handleStopPolling(args as StopPollingArgs);
             case "get-polling-status":
-              return await this.handleGetPollingStatus(args);
+              return await this.handleGetPollingStatus(args as GetPollingStatusArgs);
 
             // Interactive Assignment
             case "assign-ids":
-              return await this.handleAssignIds(args);
+              return await this.handleAssignIds(args as unknown as AssignIdsArgs);
             case "batch-assign":
-              return await this.handleBatchAssign(args);
+              return await this.handleBatchAssign(args as unknown as BatchAssignArgs);
             case "reserve-range":
-              return await this.handleReserveRange(args);
+              return await this.handleReserveRange(args as unknown as ReserveRangeArgs);
             case "get-suggestions":
-              return await this.handleGetSuggestions(args);
+              return await this.handleGetSuggestions(args as unknown as GetSuggestionsArgs);
             case "get-assignment-history":
-              return await this.handleGetAssignmentHistory(args);
+              return await this.handleGetAssignmentHistory(args as GetAssignmentHistoryArgs);
 
             // Configuration Management
             case "save-preferences":
-              return await this.handleSavePreferences(args);
+              return await this.handleSavePreferences(args as unknown as SavePreferencesArgs);
             case "get-preferences":
-              return await this.handleGetPreferences(args);
+              return await this.handleGetPreferences(args as GetPreferencesArgs);
             case "export-config":
-              return await this.handleExportConfig(args);
+              return await this.handleExportConfig(args as ExportConfigArgs);
             case "import-config":
-              return await this.handleImportConfig(args);
+              return await this.handleImportConfig(args as unknown as ImportConfigArgs);
             case "get-statistics":
-              return await this.handleGetStatistics(args);
+              return await this.handleGetStatistics(args as GetStatisticsArgs);
 
             default:
               return {
@@ -478,7 +506,24 @@ These work without prerequisites:
 
   // Handler implementations
 
-  private async handleGetNextObjectId(args: any): Promise<ToolCallResponse> {
+  /**
+   * Handles retrieval of the next available object ID without committing it.
+   * Supports standard AL objects, field IDs for tables, and enum values.
+   * This is a query-only operation that does not reserve or consume the ID.
+   *
+   * @param args - The arguments containing:
+   *   - appPath: Optional path to the AL app
+   *   - objectType: Type of object (e.g., 'table', 'page', 'field', 'enum')
+   *   - parentObjectId: For field/enum values, the parent table/enum ID
+   *   - ranges: Optional ID ranges to use (defaults to app ranges or extension ranges)
+   * @returns Promise with the next available ID or an error message
+   *
+   * @remarks
+   * Enhanced for lite mode to support field and enum value ID queries.
+   * Uses special object type format: `table_${tableId}` for fields and `enum_${enumId}` for enum values.
+   * Does not commit the ID - use handleReserveId to actually reserve an ID.
+   */
+  private async handleGetNextObjectId(args: GetNextObjectIdArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -593,7 +638,25 @@ These work without prerequisites:
     };
   }
 
-  private async handleReserveId(args: any): Promise<ToolCallResponse> {
+  /**
+   * Handles reservation of specific object IDs, including standard objects, fields, and enum values.
+   * This method commits the ID reservation to the backend and uses storeAssignment for real-time tracking
+   * to avoid overwriting existing consumption data.
+   *
+   * @param args - The arguments containing:
+   *   - appPath: Path to the AL app
+   *   - objectType: Type of object (e.g., 'table', 'page', 'field', 'enum')
+   *   - id: The specific ID to reserve
+   *   - parentObjectId: For field/enum values, the parent table/enum ID
+   *   - ranges: Optional ID ranges to use
+   * @returns Promise with the tool response indicating success or failure
+   *
+   * @remarks
+   * For field and enum value reservations, uses storeAssignment API to add individual IDs
+   * to consumption tracking without overwriting existing data. This prevents the issue
+   * where syncIds would replace all consumption with just the new ID.
+   */
+  private async handleReserveId(args: ReserveIdArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -624,6 +687,17 @@ These work without prerequisites:
         );
 
         if (success) {
+          // Use storeAssignment for real-time tracking without overwriting consumption
+          const objectType = `table_${args.parentObjectId}`;
+          const poolId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+          await this.backend.storeAssignment(
+            poolId,
+            app.authKey,
+            objectType,
+            args.id,
+            'POST'
+          );
+
           return {
             content: [{
               type: "text",
@@ -650,6 +724,17 @@ These work without prerequisites:
         );
 
         if (success) {
+          // Use storeAssignment for real-time tracking without overwriting consumption
+          const objectType = `enum_${args.parentObjectId}`;
+          const poolId = this.workspace.getPoolIdFromAppIdIfAvailable(app.appId);
+          await this.backend.storeAssignment(
+            poolId,
+            app.authKey,
+            objectType,
+            args.id,
+            'POST'
+          );
+
           return {
             content: [{
               type: "text",
@@ -736,7 +821,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleCheckAuthorization(args: any): Promise<ToolCallResponse> {
+  private async handleCheckAuthorization(args: CheckAuthorizationArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -762,7 +847,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleAuthorizeApp(args: any): Promise<ToolCallResponse> {
+  private async handleAuthorizeApp(args: AuthorizeAppArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -787,8 +872,8 @@ These work without prerequisites:
     const result = await this.backend.authorizeApp(request);
 
     if (result) {
-      // Update workspace manager
-      this.workspace.updateAppAuthorization(app.path, args.authKey);
+      // Update workspace manager with the result auth key
+      this.workspace.updateAppAuthorization(app.path, result.authKey);
       
       // Save to persistence
       const workspace = this.workspace.getCurrentWorkspace();
@@ -814,7 +899,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleSyncObjectIds(args: any): Promise<ToolCallResponse> {
+  private async handleSyncObjectIds(args: SyncObjectIdsArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -870,7 +955,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetConsumptionReport(args: any): Promise<ToolCallResponse> {
+  private async handleGetConsumptionReport(args: GetConsumptionReportArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -927,7 +1012,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleScanWorkspace(args: any): Promise<ToolCallResponse> {
+  private async handleScanWorkspace(args: ScanWorkspaceArgs): Promise<ToolCallResponse> {
     const workspace = await this.workspace.scanWorkspace(args.workspacePath);
 
     // Save to persistence
@@ -949,7 +1034,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetWorkspaceInfo(_args: any): Promise<ToolCallResponse> {
+  private async handleGetWorkspaceInfo(_args: GetWorkspaceInfoArgs): Promise<ToolCallResponse> {
     const workspace = this.workspace.getCurrentWorkspace();
     
     if (!workspace) {
@@ -979,8 +1064,8 @@ These work without prerequisites:
     };
   }
 
-  private async handleSetActiveApp(args: any): Promise<ToolCallResponse> {
-    const success = this.workspace.setActiveApp(args.appPath);
+  private async handleSetActiveApp(args: SetActiveAppArgs): Promise<ToolCallResponse> {
+    const success = this.workspace.setActiveApp(args.appPath || '');
 
     if (success) {
       const workspace = this.workspace.getCurrentWorkspace();
@@ -1007,7 +1092,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetNextFieldId(args: any): Promise<ToolCallResponse> {
+  private async handleGetNextFieldId(args: GetNextFieldIdArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1046,7 +1131,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetNextEnumValueId(args: any): Promise<ToolCallResponse> {
+  private async handleGetNextEnumValueId(args: GetNextEnumValueIdArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1085,7 +1170,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleCheckCollision(args: any): Promise<ToolCallResponse> {
+  private async handleCheckCollision(args: CheckCollisionArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1121,7 +1206,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleCheckRangeOverlaps(_args: any): Promise<ToolCallResponse> {
+  private async handleCheckRangeOverlaps(_args: CheckRangeOverlapsArgs): Promise<ToolCallResponse> {
     const overlaps = await this.collision.checkRangeOverlaps();
 
     if (overlaps.length === 0) {
@@ -1145,7 +1230,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleStartPolling(args: any): Promise<ToolCallResponse> {
+  private async handleStartPolling(args: StartPollingArgs): Promise<ToolCallResponse> {
     const config = {
       enabled: true,
       interval: args.interval || 30000,
@@ -1167,7 +1252,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleStopPolling(_args: any): Promise<ToolCallResponse> {
+  private async handleStopPolling(_args: StopPollingArgs): Promise<ToolCallResponse> {
     this.polling.stop();
 
     // Update persistence
@@ -1183,7 +1268,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetPollingStatus(_args: any): Promise<ToolCallResponse> {
+  private async handleGetPollingStatus(_args: GetPollingStatusArgs): Promise<ToolCallResponse> {
     const status = this.polling.getStatus();
 
     return {
@@ -1196,7 +1281,7 @@ These work without prerequisites:
 
   // Phase 4: Interactive Assignment handlers
 
-  private async handleAssignIds(args: any): Promise<ToolCallResponse> {
+  private async handleAssignIds(args: AssignIdsArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1244,7 +1329,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleBatchAssign(args: any): Promise<ToolCallResponse> {
+  private async handleBatchAssign(args: BatchAssignArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1253,7 +1338,10 @@ These work without prerequisites:
       };
     }
 
-    const results = await this.assignment.batchAssign(app, args.assignments);
+    const results = await this.assignment.batchAssign(app, args.assignments.map(a => ({
+      ...a,
+      objectType: a.objectType as ALObjectType
+    })));
 
     const summary = results.map(r => {
       const status = r.success ? '✅' : '❌';
@@ -1269,7 +1357,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleReserveRange(args: any): Promise<ToolCallResponse> {
+  private async handleReserveRange(args: ReserveRangeArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1302,7 +1390,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetSuggestions(args: any): Promise<ToolCallResponse> {
+  private async handleGetSuggestions(args: GetSuggestionsArgs): Promise<ToolCallResponse> {
     const app = await this.getAppFromPath(args.appPath);
     if (!app) {
       return {
@@ -1345,11 +1433,11 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetAssignmentHistory(args: any): Promise<ToolCallResponse> {
+  private async handleGetAssignmentHistory(args: GetAssignmentHistoryArgs): Promise<ToolCallResponse> {
     const app = args.appPath ? await this.getAppFromPath(args.appPath) : undefined;
 
     // Get from both assignment manager and persistence
-    const history = this.assignment.getHistory(app || undefined, args.objectType, args.limit);
+    const history = this.assignment.getHistory(app || undefined, args.objectType as ALObjectType | undefined, args.limit);
     const persistedHistory = this.persistence.getAssignmentHistory(
       app?.appId,
       args.objectType,
@@ -1359,7 +1447,7 @@ These work without prerequisites:
     // Combine and deduplicate
     const combined = [...history, ...persistedHistory.map(h => ({
       timestamp: h.timestamp,
-      app: app || { appId: h.appId } as any,
+      app: app || ({ appId: h.appId } as WorkspaceApp),
       objectType: h.objectType as ALObjectType,
       ids: h.ids,
       description: h.description
@@ -1392,7 +1480,7 @@ These work without prerequisites:
 
   // Configuration Management handlers
 
-  private async handleSavePreferences(args: any): Promise<ToolCallResponse> {
+  private async handleSavePreferences(args: SavePreferencesArgs): Promise<ToolCallResponse> {
     this.persistence.savePreferences(args.preferences);
 
     // Apply preferences
@@ -1408,7 +1496,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetPreferences(_args: any): Promise<ToolCallResponse> {
+  private async handleGetPreferences(_args: GetPreferencesArgs): Promise<ToolCallResponse> {
     const preferences = this.persistence.getPreferences();
 
     return {
@@ -1419,7 +1507,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleExportConfig(_args: any): Promise<ToolCallResponse> {
+  private async handleExportConfig(_args: ExportConfigArgs): Promise<ToolCallResponse> {
     const config = this.persistence.exportConfig();
 
     return {
@@ -1430,7 +1518,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleImportConfig(args: any): Promise<ToolCallResponse> {
+  private async handleImportConfig(args: ImportConfigArgs): Promise<ToolCallResponse> {
     const success = this.persistence.importConfig(args.config);
 
     if (success) {
@@ -1451,7 +1539,7 @@ These work without prerequisites:
     };
   }
 
-  private async handleGetStatistics(_args: any): Promise<ToolCallResponse> {
+  private async handleGetStatistics(_args: GetStatisticsArgs): Promise<ToolCallResponse> {
     const stats = this.persistence.getStatistics();
 
     const workspace = this.workspace.getCurrentWorkspace();

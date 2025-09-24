@@ -1,3 +1,5 @@
+import { LoggableData, isError } from '../types/LoggerTypes';
+
 export enum LogLevel {
   Error = 0,
   Info = 1,
@@ -34,28 +36,28 @@ export class Logger {
     this.logLevel = level;
   }
 
-  error(message: string, error?: any): void {
+  error(message: string, error?: LoggableData): void {
     if (this.logLevel >= LogLevel.Error) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[ERROR] ${this.timestamp()} ${message} ${error ? JSON.stringify(this.sanitizeData(error)) : ''}\n`);
     }
   }
 
-  info(message: string, data?: any): void {
+  info(message: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Info) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[INFO] ${this.timestamp()} ${message} ${data ? JSON.stringify(this.sanitizeData(data)) : ''}\n`);
     }
   }
 
-  verbose(message: string, data?: any): void {
+  verbose(message: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Verbose) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[VERBOSE] ${this.timestamp()} ${message} ${data ? JSON.stringify(this.sanitizeData(data)) : ''}\n`);
     }
   }
 
-  warn(message: string, data?: any): void {
+  warn(message: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Info) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[WARN] ${this.timestamp()} ${message} ${data ? JSON.stringify(this.sanitizeData(data)) : ''}\n`);
@@ -76,21 +78,21 @@ export class Logger {
     }
   }
 
-  debug(message: string, data?: any): void {
+  debug(message: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Debug) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[DEBUG] ${this.timestamp()} ${message} ${data ? JSON.stringify(this.sanitizeData(data)) : ''}\n`);
     }
   }
 
-  request(method: string, url: string, data?: any): void {
+  request(method: string, url: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Verbose) {
       // Use stderr to avoid breaking stdio transport
       process.stderr.write(`[REQUEST] ${this.timestamp()} ${method} ${url} ${data ? JSON.stringify(this.sanitizeData(data)) : ''}\n`);
     }
   }
 
-  response(status: number, url: string, data?: any): void {
+  response(status: number, url: string, data?: LoggableData): void {
     if (this.logLevel >= LogLevel.Verbose) {
       const statusText = status >= 200 && status < 300 ? 'SUCCESS' : 'FAILURE';
       // Use stderr to avoid breaking stdio transport
@@ -102,7 +104,7 @@ export class Logger {
     return new Date().toISOString();
   }
 
-  private sanitizeData(data: any): any {
+  private sanitizeData(data: unknown): unknown {
     if (data === null || data === undefined) {
       return data;
     }
@@ -111,12 +113,19 @@ export class Logger {
       return data;
     }
 
-    if (data instanceof Error) {
-      return {
+    if (isError(data)) {
+      // Create a clean error object without spreading the Error instance
+      const errorObj: Record<string, unknown> = {
         message: data.message,
-        stack: data.stack,
-        ...this.sanitizeData({ ...data })
+        stack: data.stack
       };
+      // Copy enumerable properties from the error
+      for (const key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key) && key !== 'message' && key !== 'stack') {
+          errorObj[key] = this.sanitizeData((data as any)[key]);
+        }
+      }
+      return errorObj;
     }
 
     if (Array.isArray(data)) {
@@ -124,18 +133,19 @@ export class Logger {
     }
 
     if (typeof data === 'object') {
-      const sanitized: any = {};
-      for (const key in data) {
-        if (Object.prototype.hasOwnProperty.call(data, key)) {
+      const sanitized: Record<string, unknown> = {};
+      const obj = data as Record<string, unknown>;
+      for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
           const lowerKey = key.toLowerCase();
           const isSensitive = this.sensitiveKeys.some(sensitive =>
             lowerKey.includes(sensitive.toLowerCase())
           );
 
-          if (isSensitive && data[key]) {
+          if (isSensitive && obj[key]) {
             sanitized[key] = '***REDACTED***';
           } else {
-            sanitized[key] = this.sanitizeData(data[key]);
+            sanitized[key] = this.sanitizeData(obj[key]);
           }
         }
       }

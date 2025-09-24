@@ -4,3 +4,7 @@ export * from './AuthorizationInfo';
 export * from './ConsumptionInfo';
 export * from './NextObjectIdInfo';
 export * from './NinjaALRange';
+export * from './ToolHandlerArgs';
+export * from './LoggerTypes';
+export * from './BackendTypes';
+export * from './WorkspaceTypes';

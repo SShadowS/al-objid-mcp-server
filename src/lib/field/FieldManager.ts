@@ -35,7 +35,25 @@ export class FieldManager {
   }
 
   /**
-   * Get next available field ID for a table
+   * Get next available field ID for a table without reserving it.
+   * This method queries the backend for the next available field ID but does not commit/reserve it.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param tableId - The ID of the table for which to get a field ID
+   * @param ranges - Optional ID ranges to search within (defaults to extension ranges 1..4999)
+   * @returns The next available field ID, or 0 if none available
+   *
+   * @example
+   * ```typescript
+   * const fieldId = await fieldManager.getNextFieldId(
+   *   'myApp',
+   *   'authKey123',
+   *   50100,
+   *   [{ from: 1, to: 100 }]
+   * );
+   * console.log(`Next available field ID: ${fieldId}`);
+   * ```
    */
   async getNextFieldId(
     appId: string,
@@ -81,7 +99,25 @@ export class FieldManager {
   }
 
   /**
-   * Get next available enum value ID
+   * Get next available enum value ID without reserving it.
+   * This method queries the backend for the next available enum value ID but does not commit/reserve it.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param enumId - The ID of the enum for which to get a value ID
+   * @param ranges - Optional ID ranges to search within (defaults to extension ranges)
+   * @returns The next available enum value ID, or -1 if none available
+   *
+   * @example
+   * ```typescript
+   * const valueId = await fieldManager.getNextEnumValueId(
+   *   'myApp',
+   *   'authKey123',
+   *   50200,
+   *   [{ from: 0, to: 100 }]
+   * );
+   * console.log(`Next available enum value ID: ${valueId}`);
+   * ```
    */
   async getNextEnumValueId(
     appId: string,
@@ -127,15 +163,34 @@ export class FieldManager {
   }
 
   /**
-   * Sync field IDs with backend
+   * Synchronizes field IDs with the backend service for a specific table.
+   * 
+   * @param appId - The application identifier
+   * @param authKey - Authentication key for the request
+   * @param tableId - The ID of the table containing the fields
+   * @param fieldIds - Array of field IDs to synchronize
+   * @param merge - Whether to merge with existing data or overwrite (defaults to true)
+   * @returns Promise that resolves to true if synchronization was successful, false otherwise
+   * 
+   * @example
+   * ```typescript
+   * const success = await fieldManager.syncFieldIds(
+   *   'myApp',
+   *   'authKey123',
+   *   42,
+   *   [1, 2, 3, 4],
+   *   true
+   * );
+   * ```
    */
   async syncFieldIds(
     appId: string,
     authKey: string,
     tableId: number,
-    fieldIds: number[]
+    fieldIds: number[],
+    merge = true  // Default to merge mode to avoid overwriting
   ): Promise<boolean> {
-    this.logger.verbose('Syncing field IDs', { appId, tableId, count: fieldIds.length });
+    this.logger.verbose('Syncing field IDs', { appId, tableId, count: fieldIds.length, merge });
 
     try {
       const objectType = `table_${tableId}` as ALObjectType;
@@ -148,13 +203,15 @@ export class FieldManager {
       const result = await this.backendService.syncIds({
         appId,
         authKey,
-        ids: consumptionInfo
+        ids: consumptionInfo,
+        merge  // Pass merge flag to backend service
       });
 
       if (result) {
         this.logger.info('Field IDs synced successfully', {
           tableId,
-          count: fieldIds.length
+          count: fieldIds.length,
+          merge
         });
       }
 
@@ -166,15 +223,34 @@ export class FieldManager {
   }
 
   /**
-   * Sync enum value IDs with backend
+   * Synchronizes enum value IDs with the backend service for a specific enum.
+   *
+   * @param appId - The application identifier
+   * @param authKey - Authentication key for the request
+   * @param enumId - The ID of the enum containing the values
+   * @param valueIds - Array of enum value IDs to synchronize
+   * @param merge - Whether to merge with existing data or overwrite (defaults to true)
+   * @returns Promise that resolves to true if synchronization was successful, false otherwise
+   *
+   * @example
+   * ```typescript
+   * const success = await fieldManager.syncEnumValueIds(
+   *   'myApp',
+   *   'authKey123',
+   *   100,
+   *   [0, 1, 2, 10],
+   *   true
+   * );
+   * ```
    */
   async syncEnumValueIds(
     appId: string,
     authKey: string,
     enumId: number,
-    valueIds: number[]
+    valueIds: number[],
+    merge = true  // Default to merge mode to avoid overwriting
   ): Promise<boolean> {
-    this.logger.verbose('Syncing enum value IDs', { appId, enumId, count: valueIds.length });
+    this.logger.verbose('Syncing enum value IDs', { appId, enumId, count: valueIds.length, merge });
 
     try {
       const objectType = `enum_${enumId}` as ALObjectType;
@@ -187,13 +263,15 @@ export class FieldManager {
       const result = await this.backendService.syncIds({
         appId,
         authKey,
-        ids: consumptionInfo
+        ids: consumptionInfo,
+        merge  // Pass merge flag to backend service
       });
 
       if (result) {
         this.logger.info('Enum value IDs synced successfully', {
           enumId,
-          count: valueIds.length
+          count: valueIds.length,
+          merge
         });
       }
 
@@ -205,7 +283,22 @@ export class FieldManager {
   }
 
   /**
-   * Get consumed field IDs for a table
+   * Get all consumed field IDs for a table.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param tableId - The ID of the table
+   * @returns Array of consumed field IDs, empty array if none or on error
+   *
+   * @example
+   * ```typescript
+   * const consumedIds = await fieldManager.getConsumedFieldIds(
+   *   'myApp',
+   *   'authKey123',
+   *   50100
+   * );
+   * console.log('Consumed field IDs:', consumedIds);
+   * ```
    */
   async getConsumedFieldIds(
     appId: string,
@@ -239,7 +332,22 @@ export class FieldManager {
   }
 
   /**
-   * Get consumed enum value IDs
+   * Get all consumed enum value IDs for an enum.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param enumId - The ID of the enum
+   * @returns Array of consumed enum value IDs, empty array if none or on error
+   *
+   * @example
+   * ```typescript
+   * const consumedIds = await fieldManager.getConsumedEnumValueIds(
+   *   'myApp',
+   *   'authKey123',
+   *   50200
+   * );
+   * console.log('Consumed enum value IDs:', consumedIds);
+   * ```
    */
   async getConsumedEnumValueIds(
     appId: string,
@@ -273,7 +381,23 @@ export class FieldManager {
   }
 
   /**
-   * Check if a field ID is available
+   * Check if a field ID is available for use.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param tableId - The ID of the table
+   * @param fieldId - The field ID to check
+   * @returns True if the field ID is available, false if already consumed
+   *
+   * @example
+   * ```typescript
+   * const isAvailable = await fieldManager.isFieldIdAvailable(
+   *   'myApp',
+   *   'authKey123',
+   *   50100,
+   *   10
+   * );
+   * ```
    */
   async isFieldIdAvailable(
     appId: string,
@@ -286,7 +410,23 @@ export class FieldManager {
   }
 
   /**
-   * Check if an enum value ID is available
+   * Check if an enum value ID is available for use.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param enumId - The ID of the enum
+   * @param valueId - The value ID to check
+   * @returns True if the enum value ID is available, false if already consumed
+   *
+   * @example
+   * ```typescript
+   * const isAvailable = await fieldManager.isEnumValueIdAvailable(
+   *   'myApp',
+   *   'authKey123',
+   *   50200,
+   *   1
+   * );
+   * ```
    */
   async isEnumValueIdAvailable(
     appId: string,
@@ -299,7 +439,32 @@ export class FieldManager {
   }
 
   /**
-   * Reserve a specific field ID for a table
+   * Reserve a specific field ID for a table.
+   * This method attempts to reserve/commit a specific field ID for permanent use.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param tableId - The ID of the table for which to reserve the field ID
+   * @param fieldId - The specific field ID to reserve
+   * @param ranges - Optional ID ranges to validate against (defaults to extension ranges)
+   * @returns True if the field ID was successfully reserved, false otherwise
+   *
+   * @remarks
+   * This method uses the backend's getNext API with the 'require' parameter to request
+   * a specific ID. If the ID is already taken, the reservation will fail.
+   *
+   * @example
+   * ```typescript
+   * const success = await fieldManager.reserveFieldId(
+   *   'myApp',
+   *   'authKey123',
+   *   50100,
+   *   10
+   * );
+   * if (success) {
+   *   console.log('Field ID 10 reserved successfully');
+   * }
+   * ```
    */
   async reserveFieldId(
     appId: string,
@@ -333,7 +498,32 @@ export class FieldManager {
   }
 
   /**
-   * Reserve a specific enum value ID for an enum
+   * Reserve a specific enum value ID for an enum.
+   * This method attempts to reserve/commit a specific enum value ID for permanent use.
+   *
+   * @param appId - The application ID
+   * @param authKey - Authorization key for the app
+   * @param enumId - The ID of the enum for which to reserve the value ID
+   * @param valueId - The specific value ID to reserve
+   * @param ranges - Optional ID ranges to validate against (defaults to extension ranges)
+   * @returns True if the enum value ID was successfully reserved, false otherwise
+   *
+   * @remarks
+   * This method uses the backend's getNext API with the 'require' parameter to request
+   * a specific ID. If the ID is already taken, the reservation will fail.
+   *
+   * @example
+   * ```typescript
+   * const success = await fieldManager.reserveEnumValueId(
+   *   'myApp',
+   *   'authKey123',
+   *   50200,
+   *   1
+   * );
+   * if (success) {
+   *   console.log('Enum value ID 1 reserved successfully');
+   * }
+   * ```
    */
   async reserveEnumValueId(
     appId: string,
