@@ -2,7 +2,7 @@ export class BackendError extends Error {
   constructor(
     message: string,
     public statusCode: number,
-    public details?: any
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'BackendError';
@@ -14,7 +14,7 @@ export class NetworkError extends Error {
   constructor(
     message: string,
     public code?: string,
-    public details?: any
+    public details?: Record<string, unknown>
   ) {
     super(message);
     this.name = 'NetworkError';
@@ -26,7 +26,7 @@ export class ValidationError extends Error {
   constructor(
     message: string,
     public field?: string,
-    public value?: any
+    public value?: unknown
   ) {
     super(message);
     this.name = 'ValidationError';
@@ -34,26 +34,33 @@ export class ValidationError extends Error {
   }
 }
 
+interface ErrorLike {
+  code?: string;
+  status?: number;
+  message?: string;
+  details?: Record<string, unknown>;
+}
+
 export class ErrorHandler {
-  static handle(error: any): never {
+  static handle(error: ErrorLike | Error): never {
     // Network errors
-    if (error.code) {
+    if ('code' in error && error.code) {
       switch (error.code) {
         case 'ECONNREFUSED':
-          throw new NetworkError('Connection refused. Backend service may be down.', error.code, error);
+          throw new NetworkError('Connection refused. Backend service may be down.', error.code, error.details);
         case 'ENOTFOUND':
-          throw new NetworkError('Backend service not found. Check your backend URL configuration.', error.code, error);
+          throw new NetworkError('Backend service not found. Check your backend URL configuration.', error.code, error.details);
         case 'ETIMEDOUT':
-          throw new NetworkError('Request timed out. The backend service is not responding.', error.code, error);
+          throw new NetworkError('Request timed out. The backend service is not responding.', error.code, error.details);
         case 'ECONNRESET':
-          throw new NetworkError('Connection reset by backend service.', error.code, error);
+          throw new NetworkError('Connection reset by backend service.', error.code, error.details);
         default:
-          throw new NetworkError(`Network error: ${error.message}`, error.code, error);
+          throw new NetworkError(`Network error: ${error.message || 'Unknown'}`, error.code, error.details);
       }
     }
 
     // HTTP status code errors
-    if (error.status) {
+    if ('status' in error && error.status) {
       switch (error.status) {
         case 400:
           throw new BackendError(
@@ -136,15 +143,16 @@ export class ErrorHandler {
     throw error;
   }
 
-  static isRetryable(error: any): boolean {
+  static isRetryable(error: unknown): boolean {
     // Network errors are usually retryable
     if (error instanceof NetworkError) {
       return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT'].includes(error.code || '');
     }
 
     // Check for raw error objects with network error codes
-    if (error.code) {
-      return ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'].includes(error.code);
+    if (error && typeof error === 'object' && 'code' in error) {
+      const code = (error as ErrorLike).code;
+      return code ? ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND'].includes(code) : false;
     }
 
     // Backend errors: retry on 5xx and specific 4xx codes
@@ -153,8 +161,9 @@ export class ErrorHandler {
     }
 
     // Check raw error with status
-    if (error.status !== undefined) {
-      return error.status >= 500 || error.status === 429 || error.status === 0;
+    if (error && typeof error === 'object' && 'status' in error) {
+      const status = (error as ErrorLike).status;
+      return status !== undefined ? (status >= 500 || status === 429 || status === 0) : false;
     }
 
     return false;

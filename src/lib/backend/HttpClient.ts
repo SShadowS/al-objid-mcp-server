@@ -1,18 +1,27 @@
 import * as https from 'https';
 import * as http from 'http';
 
+export interface HttpError {
+  message: string;
+  code?: string;
+  syscall?: string;
+  body?: string;
+  parseError?: unknown;
+  timeout?: number;
+}
+
 export interface HttpRequest {
   hostname: string;
   path: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   headers?: Record<string, string>;
-  data?: any;
+  data?: Record<string, unknown>; // Request body data for API calls
   timeout?: number;
 }
 
 export interface HttpResponse<T> {
   value?: T;
-  error?: any;
+  error?: HttpError;
   status: number;
   headers?: http.IncomingHttpHeaders;
 }
@@ -82,12 +91,12 @@ export class HttpClient {
         });
       });
 
-      req.on('error', (error) => {
+      req.on('error', (error: NodeJS.ErrnoException) => {
         resolve({
           error: {
             message: error.message,
-            code: (error as any).code,
-            syscall: (error as any).syscall
+            code: error.code,
+            syscall: error.syscall
           },
           status: 0
         });

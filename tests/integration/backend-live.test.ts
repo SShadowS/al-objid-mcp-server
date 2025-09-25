@@ -360,6 +360,321 @@ describeIntegration('Backend Service - Live Integration Tests', () => {
     }, 20000);
   });
 
+  describe('Lite Mode Complete Workflow', () => {
+    test('should properly reserve IDs without overriding previous assignments', async () => {
+      if (!testAuthKey) {
+        console.warn('⚠️ Skipping: No auth key available');
+        return;
+      }
+
+      const testRanges = [{ from: 60000, to: 60099 }];
+
+      // Step 1: Get first table ID (should be 60000)
+      console.log('📍 Step 1: Getting first table ID...');
+      const firstGetRequest = {
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Table,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false
+      };
+
+      const firstGetResult = await backendService.getNext(firstGetRequest, false); // false = no commit
+      const firstId = Array.isArray(firstGetResult?.id) ? firstGetResult.id[0] : firstGetResult?.id;
+      expect(firstId).toBe(60000);
+      console.log('✅ First ID retrieved (not reserved):', firstId);
+
+      // Step 2: Reserve first ID (60000)
+      console.log('📍 Step 2: Reserving first ID...');
+      const firstReserveRequest = {
+        ...firstGetRequest,
+        require: 60000
+      };
+
+      const firstReserveResult = await backendService.getNext(firstReserveRequest, true); // true = commit
+      const reservedId = Array.isArray(firstReserveResult?.id) ? firstReserveResult.id[0] : firstReserveResult?.id;
+      expect(reservedId).toBe(60000);
+      console.log('✅ First ID reserved:', reservedId);
+
+      // Step 3: Get next table ID (should be 60001, NOT 60000)
+      console.log('📍 Step 3: Getting next table ID (should skip reserved)...');
+      const secondGetResult = await backendService.getNext(firstGetRequest, false);
+      const secondId = Array.isArray(secondGetResult?.id) ? secondGetResult.id[0] : secondGetResult?.id;
+
+      expect(secondId).not.toBe(60000); // Must not return reserved ID
+      expect(secondId).toBe(60001);
+      console.log('✅ Next ID correctly skipped reserved:', secondId);
+
+      // Step 4: Reserve second ID (60001)
+      console.log('📍 Step 4: Reserving second ID...');
+      const secondReserveRequest = {
+        ...firstGetRequest,
+        require: 60001
+      };
+
+      const secondReserveResult = await backendService.getNext(secondReserveRequest, true);
+      const secondReservedId = Array.isArray(secondReserveResult?.id) ? secondReserveResult.id[0] : secondReserveResult?.id;
+      expect(secondReservedId).toBe(60001);
+      console.log('✅ Second ID reserved:', secondReservedId);
+
+      // Step 5: Get third ID (should be 60002)
+      console.log('📍 Step 5: Getting third ID...');
+      const thirdGetResult = await backendService.getNext(firstGetRequest, false);
+      const thirdId = Array.isArray(thirdGetResult?.id) ? thirdGetResult.id[0] : thirdGetResult?.id;
+
+      expect(thirdId).not.toBe(60000);
+      expect(thirdId).not.toBe(60001);
+      expect(thirdId).toBe(60002);
+      console.log('✅ Third ID correctly skipped all reserved:', thirdId);
+
+      // Verify consumption
+      const consumption = await backendService.getConsumption({
+        appId: TEST_CONFIG.testAppId,
+        authKey: testAuthKey
+      });
+
+      const tables = consumption?.[ALObjectType.Table] || [];
+      expect(tables).toContain(60000);
+      expect(tables).toContain(60001);
+      console.log('✅ Consumption correctly shows reserved IDs:', tables.filter(id => id >= 60000 && id <= 60099));
+    }, 20000);
+
+    test('should handle multiple object types independently', async () => {
+      if (!testAuthKey) {
+        console.warn('⚠️ Skipping: No auth key available');
+        return;
+      }
+
+      const testRanges = [{ from: 61000, to: 61099 }];
+
+      // Reserve table ID 61000
+      console.log('📍 Reserving table 61000...');
+      await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Table,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false,
+        require: 61000
+      }, true);
+
+      // Reserve page ID 61000 (same number, different type)
+      console.log('📍 Reserving page 61000...');
+      await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Page,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false,
+        require: 61000
+      }, true);
+
+      // Reserve codeunit ID 61000
+      console.log('📍 Reserving codeunit 61000...');
+      await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Codeunit,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false,
+        require: 61000
+      }, true);
+
+      // Get next IDs for each type (should all be 61001)
+      console.log('📍 Getting next IDs for each type...');
+
+      const nextTable = await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Table,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false
+      }, false);
+      const nextTableId = Array.isArray(nextTable?.id) ? nextTable.id[0] : nextTable?.id;
+      expect(nextTableId).toBe(61001);
+
+      const nextPage = await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Page,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false
+      }, false);
+      const nextPageId = Array.isArray(nextPage?.id) ? nextPage.id[0] : nextPage?.id;
+      expect(nextPageId).toBe(61001);
+
+      const nextCodeunit = await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Codeunit,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false
+      }, false);
+      const nextCodeunitId = Array.isArray(nextCodeunit?.id) ? nextCodeunit.id[0] : nextCodeunit?.id;
+      expect(nextCodeunitId).toBe(61001);
+
+      console.log('✅ All object types track independently:', {
+        nextTable: nextTableId,
+        nextPage: nextPageId,
+        nextCodeunit: nextCodeunitId
+      });
+    }, 20000);
+
+    test('should maintain state across sessions', async () => {
+      if (!testAuthKey) {
+        console.warn('⚠️ Skipping: No auth key available');
+        return;
+      }
+
+      const testRanges = [{ from: 62000, to: 62099 }];
+
+      // Reserve IDs 62000-62005
+      console.log('📍 Reserving IDs 62000-62005...');
+      for (let i = 62000; i <= 62005; i++) {
+        await backendService.getNext({
+          appId: TEST_CONFIG.testAppId,
+          type: ALObjectType.Report,
+          ranges: testRanges,
+          authKey: testAuthKey,
+          perRange: false,
+          require: i
+        }, true);
+      }
+
+      // Simulate "new session" by creating a new backend service instance
+      console.log('📍 Simulating new session...');
+      const newBackendService = new BackendService();
+
+      // Get next should respect previous reservations
+      const nextId = await newBackendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.Report,
+        ranges: testRanges,
+        authKey: testAuthKey,
+        perRange: false
+      }, false);
+
+      const id = Array.isArray(nextId?.id) ? nextId.id[0] : nextId?.id;
+      expect(id).toBe(62006);
+
+      console.log('✅ State persisted across sessions, next ID:', id);
+
+      // Verify all previous IDs are marked as taken
+      const consumption = await newBackendService.getConsumption({
+        appId: TEST_CONFIG.testAppId,
+        authKey: testAuthKey
+      });
+
+      const reports = consumption?.[ALObjectType.Report] || [];
+      for (let i = 62000; i <= 62005; i++) {
+        expect(reports).toContain(i);
+      }
+      console.log('✅ All reserved IDs persisted:', reports.filter(id => id >= 62000 && id <= 62099));
+    }, 25000);
+
+    test('should handle rapid bulk reservations without duplicates', async () => {
+      if (!testAuthKey) {
+        console.warn('⚠️ Skipping: No auth key available');
+        return;
+      }
+
+      const testRanges = [{ from: 63000, to: 63099 }];
+      const reservedIds: number[] = [];
+
+      console.log('📍 Performing 20 rapid reservations...');
+      const startTime = Date.now();
+
+      // Reserve 20 IDs rapidly
+      for (let i = 0; i < 20; i++) {
+        const result = await backendService.getNext({
+          appId: TEST_CONFIG.testAppId,
+          type: ALObjectType.Query,
+          ranges: testRanges,
+          authKey: testAuthKey,
+          perRange: false
+        }, true); // Commit each one
+
+        const id = Array.isArray(result?.id) ? result.id[0] : result?.id;
+        if (id) {
+          reservedIds.push(id);
+        }
+      }
+
+      const duration = Date.now() - startTime;
+
+      // Verify no duplicates
+      const uniqueIds = new Set(reservedIds);
+      expect(uniqueIds.size).toBe(20);
+      expect(uniqueIds.size).toBe(reservedIds.length);
+
+      // Verify sequential
+      const sortedIds = [...reservedIds].sort((a, b) => a - b);
+      expect(sortedIds[0]).toBe(63000);
+      expect(sortedIds[19]).toBe(63019);
+
+      console.log(`✅ Completed 20 reservations in ${duration}ms without duplicates`);
+      console.log('✅ IDs reserved:', sortedIds.slice(0, 5), '...', sortedIds.slice(-5));
+
+      // Verify all IDs are in the consumption
+      const consumption = await backendService.getConsumption({
+        appId: TEST_CONFIG.testAppId,
+        authKey: testAuthKey
+      });
+
+      const queries = consumption?.[ALObjectType.Query] || [];
+      for (const id of reservedIds) {
+        expect(queries).toContain(id);
+      }
+      console.log('✅ All bulk reserved IDs in consumption');
+    }, 30000);
+
+    test('should correctly handle range boundaries', async () => {
+      if (!testAuthKey) {
+        console.warn('⚠️ Skipping: No auth key available');
+        return;
+      }
+
+      // Use a very small range
+      const limitedRanges = [{ from: 64000, to: 64002 }]; // Only 3 IDs available
+
+      console.log('📍 Testing with limited range 64000-64002...');
+
+      // Reserve all available IDs
+      for (let i = 64000; i <= 64002; i++) {
+        const result = await backendService.getNext({
+          appId: TEST_CONFIG.testAppId,
+          type: ALObjectType.XmlPort,
+          ranges: limitedRanges,
+          authKey: testAuthKey,
+          perRange: false
+        }, true);
+
+        const id = Array.isArray(result?.id) ? result.id[0] : result?.id;
+        expect(id).toBe(i);
+        console.log(`✅ Reserved ${i}`);
+      }
+
+      // Try to get one more - should fail
+      console.log('📍 Attempting to get ID beyond range...');
+      const exhaustedResult = await backendService.getNext({
+        appId: TEST_CONFIG.testAppId,
+        type: ALObjectType.XmlPort,
+        ranges: limitedRanges,
+        authKey: testAuthKey,
+        perRange: false
+      }, false);
+
+      // Should either return undefined or have available: false
+      if (exhaustedResult) {
+        expect(exhaustedResult.available).toBe(false);
+      } else {
+        expect(exhaustedResult).toBeUndefined();
+      }
+
+      console.log('✅ Correctly handled range exhaustion');
+    }, 20000);
+  });
+
   describe('Performance Tests', () => {
     test('should handle rapid sequential requests', async () => {
       if (!testAuthKey) {

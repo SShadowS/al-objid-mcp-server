@@ -120,9 +120,10 @@ export class Logger {
         stack: data.stack
       };
       // Copy enumerable properties from the error
-      for (const key in data) {
-        if (Object.prototype.hasOwnProperty.call(data, key) && key !== 'message' && key !== 'stack') {
-          errorObj[key] = this.sanitizeData((data as any)[key]);
+      const errorAsAny = data as any; // Errors can have custom properties
+      for (const key in errorAsAny) {
+        if (Object.prototype.hasOwnProperty.call(errorAsAny, key) && key !== 'message' && key !== 'stack') {
+          errorObj[key] = this.sanitizeData(errorAsAny[key]);
         }
       }
       return errorObj;

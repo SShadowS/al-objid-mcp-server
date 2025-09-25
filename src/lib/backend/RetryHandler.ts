@@ -5,6 +5,11 @@ export interface RetryOptions {
   backoffMultiplier?: number;
 }
 
+interface ErrorWithStatus {
+  status?: number;
+  code?: string;
+}
+
 export class RetryHandler {
   private maxRetries: number;
   private initialDelay: number;
@@ -20,9 +25,9 @@ export class RetryHandler {
 
   async execute<T>(
     operation: () => Promise<T>,
-    retryable: (error: any) => boolean = (error) => {
+    retryable: (error: ErrorWithStatus) => boolean = (error) => {
       // Retry on network errors and 5xx status codes
-      if (error.status === 0 || (error.status >= 500 && error.status < 600)) {
+      if (error.status === 0 || (error.status !== undefined && error.status >= 500 && error.status < 600)) {
         return true;
       }
       // Retry on rate limiting
@@ -36,7 +41,7 @@ export class RetryHandler {
       return false;
     }
   ): Promise<T> {
-    let lastError: any;
+    let lastError: unknown;
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
@@ -44,7 +49,7 @@ export class RetryHandler {
       } catch (error) {
         lastError = error;
 
-        if (!retryable(error) || attempt === this.maxRetries) {
+        if (!retryable(error as ErrorWithStatus) || attempt === this.maxRetries) {
           throw error;
         }
 

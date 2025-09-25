@@ -220,7 +220,7 @@ export class AssignmentManager extends EventEmitter {
         appId: app.appId,
         type: objectType,
         ranges,
-        authKey: app.authKey!,
+        authKey: app.authKey || '',
         perRange: false
       };
 
@@ -376,7 +376,7 @@ export class AssignmentManager extends EventEmitter {
       appId: app.appId,
       type: objectType,
       ranges,
-      authKey: app.authKey!,
+      authKey: app.authKey || '',
       perRange: false
     };
     const nextResult = await this.backendService.getNext(nextRequest);
@@ -384,7 +384,7 @@ export class AssignmentManager extends EventEmitter {
     // Get consumption for pattern analysis
     const consumptionRequest = {
       appId: app.appId,
-      authKey: app.authKey!
+      authKey: app.authKey || ''
     };
     const consumptionInfo = await this.backendService.getConsumption(consumptionRequest);
     const consumption = consumptionInfo ? (consumptionInfo[objectType] || []) : [];

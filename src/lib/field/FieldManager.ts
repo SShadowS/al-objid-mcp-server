@@ -188,9 +188,9 @@ export class FieldManager {
     authKey: string,
     tableId: number,
     fieldIds: number[],
-    merge = true  // Default to merge mode to avoid overwriting
+    mode: 'merge' | 'replace' = 'merge'  // Default to merge mode to avoid overwriting
   ): Promise<boolean> {
-    this.logger.verbose('Syncing field IDs', { appId, tableId, count: fieldIds.length, merge });
+    this.logger.verbose('Syncing field IDs', { appId, tableId, count: fieldIds.length, mode });
 
     try {
       const objectType = `table_${tableId}` as ALObjectType;
@@ -204,14 +204,14 @@ export class FieldManager {
         appId,
         authKey,
         ids: consumptionInfo,
-        merge  // Pass merge flag to backend service
+        mode  // Use new mode parameter
       });
 
       if (result) {
         this.logger.info('Field IDs synced successfully', {
           tableId,
           count: fieldIds.length,
-          merge
+          mode
         });
       }
 
@@ -248,9 +248,9 @@ export class FieldManager {
     authKey: string,
     enumId: number,
     valueIds: number[],
-    merge = true  // Default to merge mode to avoid overwriting
+    mode: 'merge' | 'replace' = 'merge'  // Default to merge mode to avoid overwriting
   ): Promise<boolean> {
-    this.logger.verbose('Syncing enum value IDs', { appId, enumId, count: valueIds.length, merge });
+    this.logger.verbose('Syncing enum value IDs', { appId, enumId, count: valueIds.length, mode });
 
     try {
       const objectType = `enum_${enumId}` as ALObjectType;
@@ -264,14 +264,14 @@ export class FieldManager {
         appId,
         authKey,
         ids: consumptionInfo,
-        merge  // Pass merge flag to backend service
+        mode  // Use new mode parameter
       });
 
       if (result) {
         this.logger.info('Enum value IDs synced successfully', {
           enumId,
           count: valueIds.length,
-          merge
+          mode
         });
       }
 
