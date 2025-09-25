@@ -28,7 +28,7 @@ export interface SyncObjectIdsArgs {
   /**
    * Sync mode: 'merge' (UPDATE/PATCH) or 'replace' (REPLACE/POST)
    * Takes precedence over `merge` parameter
-   * @default 'replace'
+   * @default 'merge'
    */
   mode?: 'merge' | 'replace' | 'UPDATE' | 'REPLACE';
 }
@@ -120,15 +120,27 @@ export async function handleSyncObjectIds(
   const workspace = server.workspaceManager;
   const appId = workspace.getPoolIdFromAppIdIfAvailable(app.appId);
 
-  // Support sync modes: merge (UPDATE/PATCH) or replace (REPLACE/POST)
-  const merge = args.merge === true || args.mode === 'UPDATE' || args.mode === 'merge';
+  // Determine sync mode with proper defaults
+  let mode: 'merge' | 'replace' = 'merge'; // Default to merge for safety
+
+  if (args.mode) {
+    // Normalize mode values
+    if (args.mode === 'UPDATE' || args.mode === 'merge') {
+      mode = 'merge';
+    } else if (args.mode === 'REPLACE' || args.mode === 'replace') {
+      mode = 'replace';
+    }
+  } else if (args.merge !== undefined) {
+    // Fall back to deprecated merge parameter if mode not specified
+    mode = args.merge ? 'merge' : 'replace';
+  }
 
   const backend = server.backendService;
   const result = await backend.syncIds({
     appId,
     authKey: app.authKey,
     ids: args.ids,
-    merge
+    mode
   });
 
   if (result) {
@@ -140,7 +152,7 @@ export async function handleSyncObjectIds(
           app.appId,
           objectType,
           ids,
-          `${merge ? 'Merge' : 'Replace'} sync`
+          `${mode === 'merge' ? 'Merge' : 'Replace'} sync`
         );
       }
     }
@@ -148,7 +160,7 @@ export async function handleSyncObjectIds(
     return {
       content: [{
         type: "text",
-        text: `✅ Successfully synced object IDs for app "${app.name}" (${merge ? 'MERGE' : 'REPLACE'} mode)`
+        text: `✅ Successfully synced object IDs for app "${app.name}" (${mode === 'merge' ? 'MERGE' : 'REPLACE'} mode)`
       }]
     };
   }

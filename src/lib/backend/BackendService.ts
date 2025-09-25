@@ -38,7 +38,11 @@ export interface SyncIdsRequest {
   appId: string;
   authKey: string;
   ids: ConsumptionInfo;
-  merge?: boolean;
+  mode?: 'merge' | 'replace';  // Default: 'merge' for MCP (safer for programmatic use)
+  completeness?: 'partial' | 'full';  // Default: 'partial'
+  scope?: string;  // Optional: file path or module for scoped sync
+  tombstones?: ConsumptionInfo;  // Optional: IDs to remove in merge mode
+  merge?: boolean;  // Deprecated: use mode instead (kept for backward compatibility)
 }
 
 export interface GetConsumptionRequest {
@@ -342,54 +346,115 @@ export class BackendService {
   /**
    * Synchronize consumed object IDs with the backend
    *
-   * This method syncs the complete consumption state with the backend. Can operate in
-   * merge mode (default) to add to existing consumption, or replace mode to completely
-   * overwrite existing data.
+   * This method syncs consumption state with the backend. Defaults to merge mode (safer
+   * for programmatic use) but can operate in replace mode when explicitly requested.
    *
-   * @param request - The sync request containing appId, authKey, ids, and merge flag
+   * @param request - The sync request containing appId, authKey, ids, and mode
    * @returns True if synchronization was successful, false otherwise
    *
    * @remarks
-   * - PATCH method is used for merge mode (adds to existing consumption)
-   * - POST method is used for replace mode (overwrites all consumption)
-   * - Default behavior is merge mode to prevent accidental data loss
-   * - For individual ID assignments, use storeAssignment instead
+   * MCP Server behavior (differs from VS Code extension defaults):
+   * - Default: 'merge' mode (PATCH) - adds to existing consumption
+   * - Optional: 'replace' mode (POST) - overwrites all consumption
+   * - Replace mode requires explicit completeness='full' for safety
+   * - Supports scoped updates and tombstones for deletions in merge mode
    *
    * @example
    * ```typescript
-   * // Merge new IDs with existing consumption
+   * // Default: Merge new IDs with existing consumption
    * const success = await backend.syncIds({
    *   appId: 'app123',
    *   authKey: 'key456',
-   *   ids: { table: [50000, 50001], page: [50000] },
-   *   merge: true  // Default, adds to existing
+   *   ids: { table: [50003, 50004] }
+   *   // mode defaults to 'merge', completeness defaults to 'partial'
    * });
    * ```
    *
    * @example
    * ```typescript
-   * // Replace all consumption (use with caution!)
+   * // Replace all consumption (requires explicit flags)
    * const success = await backend.syncIds({
    *   appId: 'app123',
    *   authKey: 'key456',
-   *   ids: { table: [50000, 50001] },
-   *   merge: false  // Replaces all existing consumption
+   *   ids: { table: [50000, 50001, 50002] },
+   *   mode: 'replace',
+   *   completeness: 'full'  // Required for replace mode
+   * });
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Scoped update for a single file
+   * const success = await backend.syncIds({
+   *   appId: 'app123',
+   *   authKey: 'key456',
+   *   ids: { table: [50005] },
+   *   scope: 'src/tables/Customer.al',
+   *   tombstones: { table: [50000] }  // Remove old ID from this file
    * });
    * ```
    *
    * @warning
-   * Using merge: false will completely replace all existing consumption data.
-   * This can lead to data loss if not used carefully.
+   * Replace mode will completely overwrite all existing consumption data.
+   * It requires completeness='full' to prevent accidental data loss.
    */
   async syncIds(request: SyncIdsRequest): Promise<boolean> {
     try {
-      // Use PATCH for merge mode (UPDATE), POST for replace mode - matches VSCode extension
-      const method = request.merge ? 'PATCH' : 'POST';
-      
+      // Determine mode: prioritize new 'mode' parameter, fall back to deprecated 'merge' boolean
+      let mode: 'merge' | 'replace';
+      if (request.mode) {
+        mode = request.mode;
+      } else if (request.merge !== undefined) {
+        // Backward compatibility with old merge boolean
+        this.logger.warn('Using deprecated "merge" parameter in syncIds. Please use "mode" instead.');
+        mode = request.merge ? 'merge' : 'replace';
+      } else {
+        // Default to merge mode (safer for MCP programmatic use)
+        mode = 'merge';
+      }
+
+      // Safeguard: Replace mode requires explicit completeness='full'
+      if (mode === 'replace' && request.completeness !== 'full') {
+        const idCount = Object.values(request.ids).reduce((sum, arr) => sum + (arr?.length || 0), 0);
+
+        // Additional safeguard: warn if replace set seems too small
+        if (idCount < 10) {
+          this.logger.warn(
+            `Replace mode with only ${idCount} IDs. This seems unusually small. ` +
+            `Set completeness='full' to confirm this is intentional.`
+          );
+        }
+
+        throw new Error(
+          `Replace mode requires explicit completeness='full' to prevent accidental data loss. ` +
+          `Current completeness: '${request.completeness || 'partial'}'. ` +
+          `If you're sure you want to replace all consumption, set completeness='full'.`
+        );
+      }
+
+      // Log the operation mode for debugging
+      this.logger.info(
+        `Syncing IDs for app ${request.appId} in ${mode} mode` +
+        (request.scope ? ` (scope: ${request.scope})` : '') +
+        (request.tombstones ? ' with tombstones' : '')
+      );
+
+      // Use PATCH for merge mode, POST for replace mode
+      const method = mode === 'merge' ? 'PATCH' : 'POST';
+
+      // Prepare the request payload
+      const payload = {
+        appId: request.appId,
+        authKey: request.authKey,
+        ids: request.ids,
+        scope: request.scope,
+        tombstones: request.tombstones
+      };
+
       await this.sendRequest<void>(
         '/api/v2/syncIds',
         method,
-        request
+        payload
       );
       return true;
     } catch (error) {

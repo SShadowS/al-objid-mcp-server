@@ -402,7 +402,7 @@ These work without prerequisites:
   }
 
   /**
-   * Dynamically loads and executes a handler based on the command name and license tier.
+   * Dynamically loads and executes a handler based on the command name and mode.
    * This replaces the large switch statement with dynamic module loading.
    * Handlers are cached after first load to improve performance.
    *
@@ -412,26 +412,26 @@ These work without prerequisites:
    */
   private async handleToolCallDynamic(name: string, args: Record<string, unknown>): Promise<ToolCallResponse> {
     try {
-      // Get the license tier from environment (same as toolFilter.ts uses)
-      const mode = process.env.MCP_MODE?.toLowerCase();
-      const tier = mode === 'lite' ? 'lite' : 'full';
+      // Get the mode from environment (same as toolFilter.ts uses)
+      const envMode = process.env.MCP_MODE?.toLowerCase();
+      const mode = envMode === 'lite' ? 'lite' : 'full';
 
-      // Create cache key that includes tier to handle tier changes
-      const cacheKey = `${tier}:${name}`;
+      // Create cache key that includes mode to handle mode changes
+      const cacheKey = `${mode}:${name}`;
 
       // Check if handler is already cached
       let handler = this.handlerCache.get(cacheKey);
 
       if (!handler) {
         // Handler not cached, need to load it
-        const handlerConfig = getHandlerConfig(name, tier);
+        const handlerConfig = getHandlerConfig(name, mode);
 
         if (!handlerConfig) {
           return {
             content: [
               {
                 type: "text",
-                text: `Command "${name}" is not available in ${tier} tier`
+                text: `Command "${name}" is not available in ${mode} mode`
               }
             ],
             isError: true
@@ -450,7 +450,7 @@ These work without prerequisites:
 
         // Cache the handler for future use
         this.handlerCache.set(cacheKey, handler);
-        this.logger.debug(`Cached handler for ${name} in ${tier} tier`);
+        this.logger.debug(`Cached handler for ${name} in ${mode} mode`);
       }
 
       // Execute the handler with the server context (this) and arguments
@@ -473,7 +473,7 @@ These work without prerequisites:
 
   // Handler implementations are now loaded dynamically
   // All handler methods have been moved to separate files in handlers/full/ and handlers/standard/
-  // They are loaded on demand by handleToolCallDynamic based on command name and license tier
+  // They are loaded on demand by handleToolCallDynamic based on command name and mode
 
   /**
    * Clears the handler cache. Useful for testing or if handlers need to be reloaded.

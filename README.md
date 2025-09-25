@@ -300,7 +300,7 @@ mcp-server/
 
 - **Dynamic Handler Loading**: Handlers are loaded on-demand to optimize memory usage and startup time
 - **Handler Caching**: Once loaded, handlers are cached for subsequent calls
-- **Tier-Based Organization**: Handlers are organized by license tier (lite/standard/full)
+- **Mode-Based Organization**: Handlers are organized by mode (lite/standard/full)
 - **Minimal Core**: The server core is kept lean at ~500 lines, down from 1500+ lines
 
 ## 🧪 Testing & Quality Assurance

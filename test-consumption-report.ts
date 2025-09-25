@@ -60,22 +60,22 @@ function getSha256(input: string): string {
 }
 
 async function findAuthKey(appPath: string): Promise<string | undefined> {
-  // Check .bclicense file
-  const bcLicensePath = path.join(appPath, '.bclicense');
-  if (fs.existsSync(bcLicensePath)) {
-    const content = fs.readFileSync(bcLicensePath, 'utf8');
+  // Check .objidconfig for authKey
+  const objIdConfig = await findObjIdConfig(appPath);
+  if (objIdConfig && objIdConfig.authKey) {
+    return objIdConfig.authKey;
+  }
+
+  // Check .ninja file for auth key (alternative location)
+  const ninjaPath = path.join(appPath, '.ninja');
+  if (fs.existsSync(ninjaPath)) {
+    const content = fs.readFileSync(ninjaPath, 'utf8');
     const lines = content.split('\n');
     for (const line of lines) {
       if (line.startsWith('authKey=')) {
         return line.substring('authKey='.length).trim();
       }
     }
-  }
-
-  // Check .objidconfig for authKey
-  const objIdConfig = await findObjIdConfig(appPath);
-  if (objIdConfig && objIdConfig.authKey) {
-    return objIdConfig.authKey;
   }
 
   return undefined;
@@ -121,7 +121,7 @@ async function testConsumptionReport(appPath: string): Promise<void> {
 
     if (!app.authKey) {
       console.log('❌ No auth key found. Please ensure the app is authorized with Object ID Ninja.');
-      console.log('   Auth key should be in .bclicense file as: authKey=your-key-here');
+      console.log('   Auth key should be in .objidconfig or .ninja file as: authKey=your-key-here');
       return;
     }
 

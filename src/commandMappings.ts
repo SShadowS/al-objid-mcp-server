@@ -1,10 +1,10 @@
 /**
  * Centralized command-to-handler mapping registry
- * Maps tool names to their handler implementations across all license tiers
+ * Maps tool names to their handler implementations across all modes
  *
  * @description
- * This registry enables dynamic handler loading based on license tier and command name.
- * Handlers are organized by tier (lite, standard, full) to enforce license restrictions.
+ * This registry enables dynamic handler loading based on mode and command name.
+ * Handlers are organized by mode (lite, standard, full) to control feature availability.
  *
  * Structure:
  * - Lite: Basic functionality (3 commands)
@@ -31,11 +31,11 @@ interface HandlerConfig {
 }
 
 /**
- * Command mappings organized by license tier
+ * Command mappings organized by mode
  */
 export const commandMappings = {
   /**
-   * Lite tier commands - Available to all users
+   * Lite mode commands - Available to all users
    */
   lite: {
     'scan-workspace': {
@@ -53,7 +53,7 @@ export const commandMappings = {
   } as Record<string, HandlerConfig>,
 
   /**
-   * Standard tier commands - Includes all lite commands plus these
+   * Standard mode commands - Includes all lite commands plus these
    */
   standard: {
     // Authorization handlers
@@ -110,7 +110,7 @@ export const commandMappings = {
   } as Record<string, HandlerConfig>,
 
   /**
-   * Full tier commands - Includes all standard commands plus these
+   * Full mode commands - Includes all standard commands plus these
    */
   full: {
     // Assignment handlers
@@ -184,26 +184,26 @@ export const commandMappings = {
 };
 
 /**
- * Helper function to get handler configuration by command name and tier
+ * Helper function to get handler configuration by command name and mode
  *
  * @param command - The command name
- * @param tier - The license tier
+ * @param mode - The mode (lite, standard, or full)
  * @returns Handler configuration or undefined if not found
  */
 export function getHandlerConfig(
   command: string,
-  tier: 'lite' | 'standard' | 'full'
+  mode: 'lite' | 'standard' | 'full'
 ): HandlerConfig | undefined {
-  // Check current tier first
-  if (commandMappings[tier]?.[command]) {
-    return commandMappings[tier][command];
+  // Check current mode first
+  if (commandMappings[mode]?.[command]) {
+    return commandMappings[mode][command];
   }
 
-  // Check lower tiers for standard and full
-  if (tier === 'full' && commandMappings.standard[command]) {
+  // Check lower modes for standard and full
+  if (mode === 'full' && commandMappings.standard[command]) {
     return commandMappings.standard[command];
   }
-  if ((tier === 'full' || tier === 'standard') && commandMappings.lite[command]) {
+  if ((mode === 'full' || mode === 'standard') && commandMappings.lite[command]) {
     return commandMappings.lite[command];
   }
 
@@ -211,24 +211,24 @@ export function getHandlerConfig(
 }
 
 /**
- * Get all available commands for a given tier
+ * Get all available commands for a given mode
  *
- * @param tier - The license tier
+ * @param mode - The mode (lite, standard, or full)
  * @returns Array of available command names
  */
-export function getAvailableCommands(tier: 'lite' | 'standard' | 'full'): string[] {
+export function getAvailableCommands(mode: 'lite' | 'standard' | 'full'): string[] {
   const commands = new Set<string>();
 
-  // Add lite commands for all tiers
+  // Add lite commands for all modes
   Object.keys(commandMappings.lite).forEach(cmd => commands.add(cmd));
 
-  // Add standard commands for standard and full
-  if (tier === 'standard' || tier === 'full') {
+  // Add standard commands for standard and full modes
+  if (mode === 'standard' || mode === 'full') {
     Object.keys(commandMappings.standard).forEach(cmd => commands.add(cmd));
   }
 
-  // Add full commands for full tier
-  if (tier === 'full') {
+  // Add full commands for full mode
+  if (mode === 'full') {
     Object.keys(commandMappings.full).forEach(cmd => commands.add(cmd));
   }
 
