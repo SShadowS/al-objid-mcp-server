@@ -1,5 +1,7 @@
 import { ALObjectIdServer } from '../../src/server';
 import { getHandlerConfig } from '../../src/commandMappings';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('Dynamic Handler Loading', () => {
   let server: ALObjectIdServer;
@@ -12,7 +14,7 @@ describe('Dynamic Handler Loading', () => {
     it('should return correct handler config for lite tier commands', () => {
       const config = getHandlerConfig('get-next-id', 'lite');
       expect(config).toBeDefined();
-      expect(config?.path).toContain('handlers/lite/');
+      expect(config?.path).toContain('handlers/standard/');
       expect(config?.handler).toBe('handleGetNextId');
     });
 
@@ -67,7 +69,7 @@ describe('Dynamic Handler Loading', () => {
       liteCommands.forEach(cmd => {
         const config = getHandlerConfig(cmd, 'lite');
         expect(config).toBeDefined();
-        expect(config?.path).toMatch(/\.\/handlers\/lite\//);
+        expect(config?.path).toMatch(/\.\/handlers\/standard\//);
       });
     });
 
@@ -91,7 +93,7 @@ describe('Dynamic Handler Loading', () => {
     it('should use lite handlers for lite tier', () => {
       const config = getHandlerConfig('get-next-id', 'lite');
       expect(config).toBeDefined();
-      expect(config?.path).toContain('handlers/lite/');
+      expect(config?.path).toContain('handlers/standard/');
     });
 
     it('should have access to all handlers in full tier', () => {
@@ -102,6 +104,65 @@ describe('Dynamic Handler Loading', () => {
       // Full handler should be available in full tier
       const fullConfig = getHandlerConfig('assign-ids', 'full');
       expect(fullConfig).toBeDefined();
+    });
+  });
+
+  describe('Handler File Existence', () => {
+    it('should have actual handler files for all lite commands', () => {
+      const liteCommands = ['get-next-id', 'scan-workspace', 'set-active-app'];
+
+      liteCommands.forEach(cmd => {
+        const config = getHandlerConfig(cmd, 'lite');
+        expect(config).toBeDefined();
+
+        // Convert relative path to absolute path
+        const handlerPath = config!.path.replace('./', '');
+        const fullPath = path.join(__dirname, '../../src', handlerPath + '.ts');
+
+        // Check if the file exists
+        const exists = fs.existsSync(fullPath);
+        expect(exists).toBe(true);
+      });
+    });
+
+    it('should have actual handler files for all standard commands', () => {
+      const standardCommands = [
+        'check-authorization',
+        'authorize-app',
+        'get-consumption-report',
+        'get-workspace-info',
+        'get-next-field-id',
+        'get-next-enum-value-id'
+      ];
+
+      standardCommands.forEach(cmd => {
+        const config = getHandlerConfig(cmd, 'standard');
+        if (config) {
+          const handlerPath = config.path.replace('./', '');
+          const fullPath = path.join(__dirname, '../../src', handlerPath + '.ts');
+          const exists = fs.existsSync(fullPath);
+          expect(exists).toBe(true);
+        }
+      });
+    });
+
+    it('should have actual handler files for all full commands', () => {
+      const fullCommands = [
+        'assign-ids',
+        'batch-assign',
+        'reserve-range',
+        'get-suggestions'
+      ];
+
+      fullCommands.forEach(cmd => {
+        const config = getHandlerConfig(cmd, 'full');
+        if (config) {
+          const handlerPath = config.path.replace('./', '');
+          const fullPath = path.join(__dirname, '../../src', handlerPath + '.ts');
+          const exists = fs.existsSync(fullPath);
+          expect(exists).toBe(true);
+        }
+      });
     });
   });
 });

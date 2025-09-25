@@ -40,15 +40,15 @@ export const commandMappings = {
   lite: {
     'scan-workspace': {
       handler: 'handleScanWorkspace',
-      path: './handlers/lite/scanWorkspaceHandler'
+      path: './handlers/standard/workspace/scanWorkspaceHandler'
     },
     'set-active-app': {
       handler: 'handleSetActiveApp',
-      path: './handlers/lite/setActiveAppHandler'
+      path: './handlers/standard/workspace/setActiveAppHandler'
     },
     'get-next-id': {
       handler: 'handleGetNextId',
-      path: './handlers/lite/getNextIdHandler'
+      path: './handlers/standard/core/getNextIdHandler'
     }
   } as Record<string, HandlerConfig>,
 
