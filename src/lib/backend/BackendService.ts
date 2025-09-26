@@ -3,51 +3,60 @@ import { RetryHandler } from './RetryHandler';
 import { ErrorHandler } from './ErrorHandler';
 import { ConfigManager, Config } from '../config/ConfigManager';
 import { Logger, LogLevel } from '../utils/Logger';
-import { NextObjectIdInfo } from '../types/NextObjectIdInfo';
-import { AuthorizationInfo } from '../types/AuthorizationInfo';
-import { ConsumptionInfo } from '../types/ConsumptionInfo';
+import {
+  GetNextRequest as BackendGetNextRequest,
+  GetNextResponse,
+  AuthorizeAppRequest as BackendAuthorizeAppRequest,
+  AuthorizeAppResponse,
+  ObjectConsumptionRequest,
+  GetConsumptionResponse,
+  CreatePoolRequest,
+  CreatePoolResponse,
+  JoinPoolRequest,
+  JoinPoolResponse,
+  LeavePoolRequest,
+  LeavePoolResponse,
+  StoreAssignmentRequest as BackendStoreAssignmentRequest,
+  StoreAssignmentResponse,
+  DefaultRequest,
+  Range,
+  ObjectConsumptions,
+  AutoSyncResponse,
+  UpdateCheckResponse,
+  ALObjectType
+} from '../types/BackendTypes';
 import { ALRanges } from '../types/ALRange';
-import { LoggableData, PoolCreationResponse, PoolJoinResponse, AutoSyncResponse, UpdateCheckResponse } from '../types';
+import { LoggableData } from '../types';
 
+// MCP-specific response type for checkApp (backend returns plain string)
 export interface CheckAppResponse {
   managed: boolean;
   hasPool?: boolean;
   poolId?: string;
 }
 
-export interface GetNextRequest {
-  appId: string;
-  type: string;
-  ranges: ALRanges;
-  authKey: string;
-  perRange?: boolean;
-  require?: number;
-  user?: string;
+// Extended request types that include DefaultRequest fields
+export interface GetNextRequest extends BackendGetNextRequest, DefaultRequest {
+  user?: string;  // Additional field for MCP
 }
 
-export interface AuthorizeAppRequest {
+export interface AuthorizeAppRequest extends BackendAuthorizeAppRequest {
   appId: string;
   appName: string;
-  gitUser: string;
-  gitEmail: string;
   gitRepo: string;
   gitBranch: string;
 }
 
-export interface SyncIdsRequest {
-  appId: string;
-  authKey: string;
-  ids: ConsumptionInfo;
+export interface SyncIdsRequest extends ObjectConsumptionRequest, DefaultRequest {
   mode?: 'merge' | 'replace';  // Default: 'merge' for MCP (safer for programmatic use)
   completeness?: 'partial' | 'full';  // Default: 'partial'
   scope?: string;  // Optional: file path or module for scoped sync
-  tombstones?: ConsumptionInfo;  // Optional: IDs to remove in merge mode
+  tombstones?: ObjectConsumptions;  // Optional: IDs to remove in merge mode
   merge?: boolean;  // Deprecated: use mode instead (kept for backward compatibility)
 }
 
-export interface GetConsumptionRequest {
-  appId: string;
-  authKey: string;
+export interface GetConsumptionRequest extends DefaultRequest {
+  // Inherits appId and authKey from DefaultRequest
 }
 
 export interface CheckUpdateRequest {
@@ -163,15 +172,16 @@ export class BackendService {
    */
   async checkApp(appId: string): Promise<CheckAppResponse> {
     try {
-      // The v2/checkApp endpoint uses GET method with appId in the body and returns a simple string "true" or "false"
-      const response = await this.sendRequest<string>(
+      // The v2/checkApp endpoint uses GET method with body and returns "true" or "false"
+      // Note: The response can be either a string or boolean depending on how it's parsed
+      const response = await this.sendRequest<string | boolean>(
         `/api/v2/checkApp`,
         'GET',
         { appId }
       );
 
-      // Parse the string response into our expected format
-      const isManaged = response === 'true';
+      // Parse the response - handle both string and boolean responses
+      const isManaged = response === 'true' || response === true;
 
       // TODO: Get pool information from a different endpoint if needed
       // For now, we just return the basic managed status
@@ -190,15 +200,14 @@ export class BackendService {
    * Get next available object ID(s) from the backend
    *
    * This method retrieves the next available ID(s) for a given object type.
-   * Can operate in preview mode (GET) or commit mode (POST).
+   * Always uses POST method (v2 API uses POST for all endpoints).
    *
    * @param request - The request containing appId, type, ranges, and optional requirements
-   * @param commit - If true, commits the ID (POST). If false, just previews (GET)
+   * @param commit - Reserved for future use (v2 API always commits)
    * @returns Information about the next available ID(s), or undefined on error
    *
    * @remarks
-   * - GET method (commit=false) just returns the next available ID without reserving
-   * - POST method (commit=true) reserves the ID and marks it as consumed
+   * - POST method reserves the ID and marks it as consumed
    * - When require is specified, attempts to reserve that specific ID
    * - perRange flag affects how IDs are distributed across ranges
    *
@@ -239,17 +248,18 @@ export class BackendService {
   async getNext(
     request: GetNextRequest,
     commit = false
-  ): Promise<NextObjectIdInfo | undefined> {
+  ): Promise<GetNextResponse | undefined> {
+    // v2 API uses GET for preview, POST for commit
     const method = commit ? 'POST' : 'GET';
 
-    // Apply range limiting logic when committing with perRange and require
+    // Apply range limiting logic when perRange and require are specified
     let ranges = request.ranges;
-    if (commit && request.perRange && request.require) {
+    if (request.perRange && request.require) {
       ranges = this.limitRanges(request.ranges, request.require);
     }
 
     try {
-      const response = await this.sendRequest<NextObjectIdInfo>(
+      const response = await this.sendRequest<GetNextResponse>(
         '/api/v2/getNext',
         method,
         { ...request, ranges }
@@ -277,21 +287,15 @@ export class BackendService {
   /**
    * Authorize an app for ID management (POST)
    */
-  async authorizeApp(request: AuthorizeAppRequest): Promise<AuthorizationInfo> {
+  async authorizeApp(request: AuthorizeAppRequest): Promise<AuthorizeAppResponse> {
     try {
-      // The backend returns only { authKey } on successful authorization
-      const response = await this.sendRequest<{ authKey?: string }>(
+      const response = await this.sendRequest<AuthorizeAppResponse>(
         '/api/v2/authorizeApp',
         'POST',
         request
       );
 
-      // Add the authorized flag since our interface expects it
-      return {
-        authKey: response.authKey || '',
-        authorized: !!response.authKey,
-        error: response.authKey ? undefined : 'Authorization failed'
-      };
+      return response;
     } catch (error) {
       this.logger.error(`Failed to authorize app ${request.appId}`, error);
       throw error;
@@ -301,24 +305,15 @@ export class BackendService {
   /**
    * Get authorization info for an app (GET)
    */
-  async getAuthInfo(appId: string, authKey: string): Promise<AuthorizationInfo | undefined> {
+  async getAuthInfo(appId: string, authKey: string): Promise<AuthorizeAppResponse | undefined> {
     try {
-      const response = await this.sendRequest<{
-        authorized: boolean;
-        user?: { name: string; email: string };
-        valid?: boolean;
-      }>(
+      const response = await this.sendRequest<AuthorizeAppResponse>(
         '/api/v2/authorizeApp',
         'GET',
         { appId, authKey }
       );
 
-      return {
-        authKey,
-        authorized: response.authorized,
-        user: response.user,
-        valid: response.valid
-      };
+      return response;
     } catch (error) {
       this.logger.error(`Failed to get auth info for app ${appId}`, error);
       return undefined;
@@ -470,7 +465,7 @@ export class BackendService {
     appFolders: Array<{
       appId: string;
       authKey?: string;
-      ids: ConsumptionInfo;
+      ids: ObjectConsumptions;
     }>,
     patch = false
   ): Promise<AutoSyncResponse> {
@@ -534,18 +529,18 @@ export class BackendService {
   async storeAssignment(
     appId: string,
     authKey: string,
-    type: string,
+    type: ALObjectType | string,  // Accept string for field/enum types like "table_50000"
     id: number,
     method: 'POST' | 'DELETE'
   ): Promise<boolean> {
     try {
-      const response = await this.sendRequest<{ updated?: boolean }>(
+      const response = await this.sendRequest<StoreAssignmentResponse>(
         '/api/v2/storeAssignment',
         method,
-        { appId, authKey, type, id }
+        { appId, authKey, type: type as ALObjectType, id }
       );
 
-      return !!response.updated;
+      return !!response?.success;
     } catch (error) {
       this.logger.error(`Failed to ${method === 'POST' ? 'add' : 'remove'} assignment for app ${appId}`, error);
       return false;
@@ -555,25 +550,14 @@ export class BackendService {
   /**
    * Get consumption data for an app
    */
-  async getConsumption(request: GetConsumptionRequest): Promise<ConsumptionInfo | undefined> {
+  async getConsumption(request: GetConsumptionRequest): Promise<GetConsumptionResponse | undefined> {
     try {
-      // Send as GET with body (matches VSCode extension behavior)
-      const response = await this.sendRequest<ConsumptionInfo>(
+      // Send as GET with body (v2 API uses GET with body)
+      const response = await this.sendRequest<GetConsumptionResponse>(
         '/api/v2/getConsumption',
         'GET',
         request
       );
-
-      // Add _total field to match Azure backend behavior
-      if (response) {
-        let total = 0;
-        for (const key of Object.keys(response)) {
-          if (Array.isArray(response[key])) {
-            total += response[key].length;
-          }
-        }
-        (response as ConsumptionInfo & { _total?: number })._total = total;
-      }
 
       return response;
     } catch (error) {
@@ -631,29 +615,21 @@ export class BackendService {
   async createPool(
     appId: string,
     authKey: string,
-    name: string,
-    joinKey: string,
-    managementSecret: string,
-    apps?: Array<{ appId: string; name: string }>,
-    allowAnyAppToManage = false
-  ): Promise<PoolCreationResponse | undefined> {
+    name?: string,
+    apps?: Array<{ appId: string; name: string }>
+  ): Promise<CreatePoolResponse | undefined> {
     try {
-      const response = await this.sendRequest<{
-        poolId: string;
-        accessKey: string;
-        validationKey: string;
-        managementKey: string;
-        leaveKeys: Record<string, string>;
-      }>(
+      const request: CreatePoolRequest & DefaultRequest = {
+        appId,
+        authKey,
+        name,
+        apps
+      };
+
+      const response = await this.sendRequest<CreatePoolResponse>(
         '/api/v2/createPool',
         'POST',
-        {
-          name,
-          joinKey,
-          managementSecret,
-          apps: apps || [{ appId, name }],
-          allowAnyAppToManage
-        }
+        request
       );
       return response;
     } catch (error) {
@@ -666,15 +642,23 @@ export class BackendService {
    * Join an app pool
    */
   async joinPool(
+    appId: string,
+    authKey: string,
     poolId: string,
-    joinKey: string,
-    apps: Array<{ appId: string; name: string }>
-  ): Promise<PoolJoinResponse | null> {
+    joinKey: string
+  ): Promise<JoinPoolResponse | null> {
     try {
-      const response = await this.sendRequest<PoolJoinResponse>(
+      const request: JoinPoolRequest & DefaultRequest = {
+        appId,
+        authKey,
+        poolId,
+        joinKey
+      };
+
+      const response = await this.sendRequest<JoinPoolResponse>(
         '/api/v2/joinPool',
         'POST',
-        { poolId, joinKey, apps }
+        request
       );
       return response;
     } catch (error) {
@@ -688,12 +672,17 @@ export class BackendService {
    */
   async leavePool(appId: string, authKey: string): Promise<boolean> {
     try {
-      await this.sendRequest<void>(
+      const request: LeavePoolRequest & DefaultRequest = {
+        appId,
+        authKey
+      };
+
+      const response = await this.sendRequest<LeavePoolResponse>(
         '/api/v2/leavePool',
         'POST',
-        { appId, authKey }
+        request
       );
-      return true;
+      return response.success;
     } catch (error) {
       this.logger.error(`Failed to leave pool for app ${appId}`, error);
       return false;

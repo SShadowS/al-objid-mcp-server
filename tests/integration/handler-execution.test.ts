@@ -15,45 +15,9 @@ describe('Handler Execution - Real Tests', () => {
   let testApp: string;
 
   beforeAll(() => {
-    // Create a temporary test workspace
-    testWorkspace = path.join(os.tmpdir(), 'objid-test-' + Date.now());
-    fs.mkdirSync(testWorkspace, { recursive: true });
-
-    // Create a test app directory
-    testApp = path.join(testWorkspace, 'TestApp');
-    fs.mkdirSync(testApp, { recursive: true });
-
-    // Create a minimal app.json
-    const appJson = {
-      id: 'test-app-id',
-      name: 'Test App',
-      publisher: 'Test Publisher',
-      version: '1.0.0.0',
-      idRanges: [
-        { from: 50000, to: 50099 }
-      ]
-    };
-    fs.writeFileSync(path.join(testApp, 'app.json'), JSON.stringify(appJson, null, 2));
-
-    // Create a .objidconfig file
-    const objidConfig = {
-      objectRanges: [
-        { from: 50000, to: 50099, description: 'Test Range' }
-      ],
-      bcLicense: [],
-      idRanges: [
-        { from: 50000, to: 50099 }
-      ],
-      nextId: 50000
-    };
-    fs.writeFileSync(path.join(testApp, '.objidconfig'), JSON.stringify(objidConfig, null, 2));
-  });
-
-  afterAll(() => {
-    // Clean up test workspace
-    if (fs.existsSync(testWorkspace)) {
-      fs.rmSync(testWorkspace, { recursive: true, force: true });
-    }
+    // Use the existing authorized test AL project
+    testApp = path.join(__dirname, '../al');
+    testWorkspace = path.dirname(testApp);
   });
 
   beforeEach(() => {
@@ -153,8 +117,8 @@ describe('Handler Execution - Real Tests', () => {
 
       expect(result).toBeDefined();
       expect(result.content).toBeDefined();
-      expect(result.content[0].text).toContain('Found');
-      expect(result.content[0].text).toContain('AL app(s)');
+      expect(result.content[0].text).toContain('Found 1 AL app(s)');
+      expect(result.content[0].text).toContain('ALProject1');
     });
 
     it('should execute set-active-app with real app path', async () => {
@@ -186,28 +150,29 @@ describe('Handler Execution - Real Tests', () => {
       );
       await setActiveModule[setActiveConfig!.handler](server, { appPath: testApp });
 
-      // Authorize the app first (mock authorization for testing)
-      const app = await server.getAppFromPath(testApp);
-      if (app) {
-        app.isAuthorized = true;
-        app.authKey = 'test-auth-key';
-      }
-
-      // Now get next ID
+      // Now get next ID (app is already authorized)
       const config = getHandlerConfig('get-next-id', 'standard');
       const modulePath = path.join(__dirname, '../../src', config!.path.replace('./', ''));
       const handlerModule = await import(modulePath);
 
       const result = await handlerModule[config!.handler](server, {
-        type: 'table',
+        objectType: 'table',
         appPath: testApp
       });
 
       expect(result).toBeDefined();
       expect(result.content).toBeDefined();
       const responseText = result.content[0].text;
-      expect(responseText).toContain('50000');
-      expect(responseText).toContain('table');
+      // ID should be in the range 50100-50149
+      expect(responseText).toMatch(/ID: (\d+)/);
+      expect(responseText.toLowerCase()).toContain('table');
+
+      const idMatch = responseText.match(/ID: (\d+)/);
+      if (idMatch) {
+        const id = parseInt(idMatch[1]);
+        expect(id).toBeGreaterThanOrEqual(50100);
+        expect(id).toBeLessThanOrEqual(50149);
+      }
     });
   });
 

@@ -26,7 +26,9 @@ fix-*.md
 
 # Configuration files
 tsconfig.json
+tsconfig.v2.json
 jest.config.js
+jest.config.v2.js
 .eslintrc.*
 
 # Git files
@@ -41,5 +43,15 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Keep dist/ (build output) - this is what gets published
-# Keep package.json, README.md, LICENSE automatically
+# Exclude all v1 build files
+dist/commandMappings.*
+dist/server.*
+dist/server-old.*
+dist/handlers/
+dist/resources/
+dist/tools/
+dist/types/
+dist/utils/
+
+# Only keep dist/v2/ directory
+# Everything under dist/v2/ will be included
