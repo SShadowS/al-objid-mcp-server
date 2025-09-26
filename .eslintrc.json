@@ -25,6 +25,7 @@
     "node_modules/",
     "tests/",
     "*.test.ts",
-    "*.js"
+    "*.js",
+    "src/lib/"
   ]
 }

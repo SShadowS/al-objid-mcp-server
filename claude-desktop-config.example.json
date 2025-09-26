@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "objid-ninja": {
+      "command": "node",
+      "args": ["C:/path/to/objid-mcp/mcp-server/dist/v2/server.js"],
+      "env": {
+        "BACKEND_URL": "https://vjekocom-alext-weu.azurewebsites.net",
+        "MCP_MODE": "lite",
+        "LOG_LEVEL": "info",
+        "CACHE_ENABLED": "true"
+      }
+    }
+  }
+}
