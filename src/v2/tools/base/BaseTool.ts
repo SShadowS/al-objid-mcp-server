@@ -61,19 +61,12 @@ export abstract class BaseTool<TParams, TResult> {
    * Get JSON schema from Zod schema
    */
   private getInputSchema() {
-    try {
-      // This is a simplified version - in production, use a proper Zod to JSON Schema converter
-      return {
-        type: 'object',
-        properties: {},
-        required: [],
-      };
-    } catch {
-      return {
-        type: 'object',
-        properties: {},
-      };
-    }
+    // This is a simplified version - in production, use a proper Zod to JSON Schema converter
+    return {
+      type: 'object',
+      properties: {},
+      required: [],
+    };
   }
 
   /**

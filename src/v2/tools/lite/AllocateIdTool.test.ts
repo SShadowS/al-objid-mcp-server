@@ -8,7 +8,8 @@ import { AllocateIdTool } from './AllocateIdTool';
 jest.mock('../../lib/backend/BackendService', () => {
   return {
     BackendService: jest.fn().mockImplementation(() => ({
-      allocateId: jest.fn()
+      allocateId: jest.fn(),
+      storeAssignment: jest.fn()
     }))
   };
 });
@@ -71,7 +72,8 @@ describe('AllocateIdTool', () => {
 
     // Setup BackendService mock
     mockBackendInstance = {
-      allocateId: jest.fn()
+      allocateId: jest.fn(),
+      storeAssignment: jest.fn().mockResolvedValue({ updated: true })
     };
 
     (BackendService as jest.Mock).mockImplementation(() => mockBackendInstance);
@@ -87,7 +89,7 @@ describe('AllocateIdTool', () => {
   it('should have correct tool definition', () => {
     const definition = tool.getDefinition();
     expect(definition.name).toBe('allocate_id');
-    expect(definition.description).toBe('Preview, reserve, or reclaim object IDs for AL development');
+    expect(definition.description).toBe('Preview, reserve, or reclaim object IDs for AL development. REQUIRES mode ("preview"|"reserve"|"reclaim"), appPath: absolute path to the workspace directory containing app.json and .objidconfig - NOT a file path. Example (OK): "C:\\Projects\\MyALApp" or "/home/user/MyALApp". Example (NOT OK): "path/to/app.json". REQUIRES object_type (AL object type string). Optional: count (number, default: 1), pool_id (string), preferred_range ({from:number, to:number}), object_metadata ({name?:string, file?:string, tag?:string}), ids (number[], reclaim mode only), dry_run (boolean, default: false), auto_track (boolean, reserve mode only, default: true - automatically stores assignments after reservation).');
   });
 
   describe('preview mode', () => {
@@ -172,7 +174,8 @@ describe('AllocateIdTool', () => {
         appPath: '/test/path',
         object_type: 'table',
         count: 2,
-        dry_run: false
+        dry_run: false,
+        ranges: [{ from: 1000, to: 1999 }]
       });
       expect(result.reserved).toBe(true);
       expect(result.ids).toEqual([1002, 1003]);
@@ -216,6 +219,152 @@ describe('AllocateIdTool', () => {
       });
 
       expect(result.metadata).toEqual(metadata);
+    });
+
+    describe('auto_track functionality', () => {
+      beforeEach(() => {
+        mockBackendInstance.allocateId.mockResolvedValue({
+          mode: 'reserve',
+          ids: [1002, 1003],
+          object_type: 'table',
+          reserved: true
+        });
+      });
+
+      it('should auto-track assignments by default', async () => {
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 2
+        });
+
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledTimes(2);
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledWith({
+          appPath: '/test/path',
+          authKey: undefined,
+          type: 'table',
+          id: 1002
+        });
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledWith({
+          appPath: '/test/path',
+          authKey: undefined,
+          type: 'table',
+          id: 1003
+        });
+      });
+
+      it('should auto-track when explicitly enabled', async () => {
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 2,
+          auto_track: true
+        });
+
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledTimes(2);
+      });
+
+      it('should not auto-track when disabled', async () => {
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 2,
+          auto_track: false
+        });
+
+        expect(mockBackendInstance.storeAssignment).not.toHaveBeenCalled();
+      });
+
+      it('should pass authKey to storeAssignment', async () => {
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 2,
+          authKey: 'test-key'
+        });
+
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledWith({
+          appPath: '/test/path',
+          authKey: 'test-key',
+          type: 'table',
+          id: 1002
+        });
+      });
+
+      it('should continue reserving even if tracking fails', async () => {
+        mockBackendInstance.storeAssignment.mockRejectedValue(new Error('Tracking failed'));
+
+        const result = await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 2
+        });
+
+        expect(result.reserved).toBe(true);
+        expect(result.ids).toEqual([1002, 1003]);
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledTimes(2);
+      });
+
+      it('should track single ID correctly', async () => {
+        mockBackendInstance.allocateId.mockResolvedValue({
+          mode: 'reserve',
+          ids: [1002],
+          object_type: 'page',
+          reserved: true
+        });
+
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'page',
+          count: 1
+        });
+
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledTimes(1);
+        expect(mockBackendInstance.storeAssignment).toHaveBeenCalledWith({
+          appPath: '/test/path',
+          authKey: undefined,
+          type: 'page',
+          id: 1002
+        });
+      });
+
+      it('should not track if no IDs returned', async () => {
+        mockBackendInstance.allocateId.mockResolvedValue({
+          mode: 'reserve',
+          ids: [],
+          object_type: 'table',
+          reserved: true
+        });
+
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 1
+        });
+
+        expect(mockBackendInstance.storeAssignment).not.toHaveBeenCalled();
+      });
+
+      it('should not track in dry_run mode', async () => {
+        (WorkspaceUtils.scanWorkspace as jest.Mock).mockResolvedValue([]);
+
+        await tool.execute({
+          mode: 'reserve',
+          appPath: '/test/path',
+          object_type: 'table',
+          count: 1,
+          dry_run: true
+        });
+
+        expect(mockBackendInstance.storeAssignment).not.toHaveBeenCalled();
+      });
     });
   });
 

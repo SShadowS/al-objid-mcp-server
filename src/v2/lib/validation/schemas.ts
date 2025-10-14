@@ -104,6 +104,8 @@ export const allocateIdSchema = z.object({
   object_metadata: objectMetadataSchema.optional(),
   ids: z.array(z.number().int().positive()).optional(),
   dry_run: z.boolean().optional().default(false),
+  auto_track: z.boolean().optional(),
+  authKey: z.string().optional(),
 });
 
 // ============================================================================

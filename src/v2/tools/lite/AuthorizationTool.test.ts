@@ -85,7 +85,7 @@ describe('AuthorizationTool', () => {
   it('should have correct tool definition', () => {
     const definition = tool.getDefinition();
     expect(definition.name).toBe('authorization');
-    expect(definition.description).toBe('Manage app authorization for Object ID synchronization');
+    expect(definition.description).toBe('Manage app authorization for Object ID synchronization. REQUIRES action ("status"|"start"|"deauthorize"), appPath: absolute path to the workspace directory containing app.json and .objidconfig - NOT a file path. Example (OK): "C:\\Projects\\MyALApp" or "/home/user/MyALApp". Example (NOT OK): "path/to/app.json". Optional: interactive (boolean, default: true).');
   });
 
   it('should handle status action', async () => {

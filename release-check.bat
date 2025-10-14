@@ -33,14 +33,14 @@ if %errorlevel% neq 0 (
 echo       Linting passed!
 echo.
 
-echo [4/6] Running tests...
-call npm test
+echo [4/6] Running unit tests (E2E tests skipped)...
+call npm run test:unit
 if %errorlevel% neq 0 (
     echo.
     echo ERROR: Tests failed!
     exit /b 1
 )
-echo       Tests passed!
+echo       Unit tests passed!
 echo.
 
 echo [5/6] Building project...

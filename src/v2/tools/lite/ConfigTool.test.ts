@@ -62,7 +62,7 @@ describe('ConfigTool', () => {
   it('should have correct tool definition', () => {
     const definition = tool.getDefinition();
     expect(definition.name).toBe('config');
-    expect(definition.description).toBe('Read, write, and validate .objidconfig configuration files');
+    expect(definition.description).toBe('Read, write, and validate .objidconfig configuration files. REQUIRES action ("read"|"write"|"validate"), appPath: absolute path to the workspace directory containing app.json and .objidconfig - NOT a file path. Example (OK): "C:\\Projects\\MyALApp" or "/home/user/MyALApp". Example (NOT OK): "path/to/.objidconfig". Optional: keys (string[], read only), patch (object, write only), merge (boolean, write only, default: true), schema_version (string).');
   });
 
   describe('read action', () => {

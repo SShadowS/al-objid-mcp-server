@@ -85,6 +85,9 @@ export interface AllocateIdParams {
   };
   ids?: number[];
   dry_run?: boolean;
+  ranges?: Range[];  // ID ranges for the object type (passed to backend)
+  authKey?: string;  // Authorization key for backend operations
+  auto_track?: boolean;  // Auto-track assignments after reservation (default: true)
 }
 
 export interface AllocateIdResult {

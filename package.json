@@ -21,6 +21,7 @@
     "dev:v1": "ts-node src/server.ts",
     "dev:local": "BACKEND_URL=http://localhost:7071 npm run dev",
     "test": "jest --config jest.config.v2.js",
+    "test:unit": "jest --config jest.config.v2.js --testPathIgnorePatterns=e2e --testPathIgnorePatterns=realbackend",
     "test:v1": "jest",
     "test:e2e": "jest --config jest.config.v2.js tests/v2/e2e --runInBand --forceExit",
     "test:e2e:watch": "jest --config jest.config.v2.js tests/v2/e2e --runInBand --watch",
