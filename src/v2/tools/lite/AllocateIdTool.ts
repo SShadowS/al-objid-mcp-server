@@ -23,7 +23,7 @@ export class AllocateIdTool extends BaseTool<AllocateIdParams, AllocateIdResult>
   constructor() {
     super(
       'allocate_id',
-      'Preview, reserve, or reclaim object IDs for AL development. REQUIRES mode ("preview"|"reserve"|"reclaim"), appPath: absolute path to the workspace directory containing app.json and .objidconfig - NOT a file path. Example (OK): "C:\\Projects\\MyALApp" or "/home/user/MyALApp". Example (NOT OK): "path/to/app.json". REQUIRES object_type (AL object type string). Optional: count (number, default: 1), pool_id (string), preferred_range ({from:number, to:number}), object_metadata ({name?:string, file?:string, tag?:string}), ids (number[], reclaim mode only), dry_run (boolean, default: false).',
+      'Preview, reserve, or reclaim object IDs for AL development. REQUIRES mode ("preview"|"reserve"|"reclaim"), appPath: absolute path to the workspace directory containing app.json and .objidconfig - NOT a file path. Example (OK): "C:\\Projects\\MyALApp" or "/home/user/MyALApp". Example (NOT OK): "path/to/app.json". REQUIRES object_type (AL object type string). Optional: count (number, default: 1), pool_id (string), preferred_range ({from:number, to:number}), object_metadata ({name?:string, file?:string, tag?:string}), ids (number[], reclaim mode only), dry_run (boolean, default: false), auto_track (boolean, reserve mode only, default: true - automatically stores assignments after reservation).',
       allocateIdSchema
     );
 
@@ -170,9 +170,11 @@ export class AllocateIdTool extends BaseTool<AllocateIdParams, AllocateIdResult>
       }
 
       // Get next available IDs from backend
+      // CRITICAL: Pass ranges to backend so it can track reservations properly
       const result = await this.backend.allocateId({
         ...params,
-        mode: 'reserve'
+        mode: 'reserve',
+        ranges: ranges  // Pass the ID ranges from config
       });
 
       // Validate returned IDs are within ranges
@@ -185,6 +187,31 @@ export class AllocateIdTool extends BaseTool<AllocateIdParams, AllocateIdResult>
           invalidIds,
           ranges
         });
+      }
+
+      // Auto-track assignments if enabled (default: true)
+      const autoTrack = params.auto_track !== false;
+      if (autoTrack && result.ids.length > 0) {
+        this.logger.info(`Auto-tracking ${result.ids.length} reserved IDs`, {
+          ids: result.ids,
+          objectType: params.object_type
+        });
+
+        // Track each ID individually
+        for (const id of result.ids) {
+          try {
+            await this.backend.storeAssignment({
+              appPath: params.appPath,
+              authKey: params.authKey,
+              type: params.object_type,
+              id
+            });
+            this.logger.debug(`Stored assignment for ${params.object_type} ${id}`);
+          } catch (error) {
+            // Log but don't fail the whole operation
+            this.logger.warn(`Failed to store assignment for ${params.object_type} ${id}`, error);
+          }
+        }
       }
 
       return {

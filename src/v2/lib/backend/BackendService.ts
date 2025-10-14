@@ -30,8 +30,8 @@ import {
   GetNewsResult,
   AuthorizeAppRequest,
   GetNextRequest,
-  ALObjectType,
-  Range
+  StoreAssignmentResponse,
+  ALObjectType
 } from '../types/backend';
 
 /**
@@ -131,6 +131,83 @@ export class BackendService {
     }
   }
 
+  /**
+   * Store an ID assignment for tracking
+   */
+  async storeAssignment(params: {
+    appPath: string;
+    authKey?: string;
+    type: ALObjectType | string;
+    id: number;
+  }): Promise<StoreAssignmentResponse> {
+    try {
+      const appId = await this.getAppId(params.appPath);
+      const endpoint = '/api/v2/storeAssignment';
+      const response = await this.client.post(endpoint, {
+        appId,
+        authKey: params.authKey || '',
+        type: params.type as ALObjectType,
+        id: params.id
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error, 'store_assignment');
+    }
+  }
+
+  /**
+   * Remove an ID assignment
+   */
+  async removeAssignment(params: {
+    appPath: string;
+    authKey?: string;
+    type: ALObjectType | string;
+    id: number;
+  }): Promise<StoreAssignmentResponse> {
+    try {
+      const appId = await this.getAppId(params.appPath);
+      const endpoint = '/api/v2/storeAssignment';
+      const response = await this.client.delete(endpoint, {
+        data: {
+          appId,
+          authKey: params.authKey || '',
+          type: params.type as ALObjectType,
+          id: params.id
+        }
+      });
+      return response.data;
+    } catch (error) {
+      throw this.handleError(error, 'remove_assignment');
+    }
+  }
+
+  /**
+   * Check if an app exists/is known by the backend
+   */
+  async checkApp(params: {
+    appPath: string;
+  }): Promise<boolean> {
+    try {
+      const appId = await this.getAppId(params.appPath);
+      const endpoint = '/api/v2/checkApp';
+      const response = await this.client.get(endpoint, {
+        data: {
+          appId
+        }
+      });
+      
+      // Backend returns string "true"/"false" or boolean
+      const result = response.data;
+      return result === 'true' || result === true;
+    } catch (error) {
+      // If app not found, return false instead of throwing
+      if (axios.isAxiosError(error) && error.response?.status === 404) {
+        return false;
+      }
+      throw this.handleError(error, 'check_app');
+    }
+  }
+
   // ============================================================================
   // Helper Methods
   // ============================================================================
@@ -219,12 +296,14 @@ export class BackendService {
       const appId = await this.getAppId(params.appPath);
       const endpoint = '/api/v2/getConsumption';
 
-      // getConsumption expects appId and authKey in body
-      // The app must be authorized first
-      const response = await this.client.post(endpoint, {
-        appId,
-        authKey: params.authKey || '',
-        _sourceAppId: params.sourceAppId || appId  // For pool operations
+      // FIXED: Use GET method to match VS Code extension behavior
+      // Azure Functions expects body even with GET request
+      const response = await this.client.get(endpoint, {
+        data: {
+          appId,
+          authKey: params.authKey || '',
+          _sourceAppId: params.sourceAppId || appId  // For pool operations
+        }
       });
 
       return response.data || {};
@@ -265,30 +344,22 @@ export class BackendService {
    * Get activity logs
    */
   async getLogs(_params: GetLogsParams): Promise<GetLogsResult> {
-    try {
-      // Note: getLog doesn't exist in v2, return empty logs
-      // In production, this might fall back to v1 or use a different endpoint
-      return {
-        logs: []
-      };
-    } catch (error) {
-      throw this.handleError(error, 'logs');
-    }
+    // Note: getLog doesn't exist in v2, return empty logs
+    // In production, this might fall back to v1 or use a different endpoint
+    return {
+      logs: []
+    };
   }
 
   /**
    * Get news from RSS feed
    */
   async getNews(_params: GetNewsParams): Promise<GetNewsResult> {
-    try {
-      // Note: news endpoint doesn't exist in v2, return empty news
-      // In production, this would fetch from an RSS feed or different service
-      return {
-        news: []
-      };
-    } catch (error) {
-      throw this.handleError(error, 'news');
-    }
+    // Note: news endpoint doesn't exist in v2, return empty news
+    // In production, this would fetch from an RSS feed or different service
+    return {
+      news: []
+    };
   }
 
   // ============================================================================
@@ -311,7 +382,7 @@ export class BackendService {
 
       // Hash the app ID using SHA256 (as per VS Code extension)
       return createHash('sha256').update(appJson.id).digest('hex');
-    } catch (error) {
+    } catch {
       // Fallback to hashing the app path if we can't read app.json
       return createHash('sha256').update(appPath).digest('hex');
     }
@@ -384,23 +455,29 @@ export class BackendService {
   private async prepareAllocationPayload(params: AllocateIdParams): Promise<Partial<GetNextRequest>> {
     const appId = await this.getAppId(params.appPath);
 
+    // CRITICAL FIX: Use ranges from params instead of empty array
+    // The backend needs ranges to properly track and reserve IDs
+    const ranges = params.ranges || [];
+
     const basePayload = {
       appId,
+      authKey: params.authKey,  // Include authKey for proper app tracking
       type: params.object_type as ALObjectType,
       count: params.count || 1,
-      ranges: [] as Range[]
+      ranges: ranges
     };
 
     switch (params.mode) {
       case 'preview':
-        return basePayload; // Preview is handled by backend based on mode
+        return basePayload;
       case 'reserve':
-        return basePayload; // Commit is handled by backend based on mode
+        return basePayload;  // Ranges are critical for reserve mode
       case 'reclaim':
         return {
           appId,
+          authKey: params.authKey,
           type: params.object_type as ALObjectType,
-          ranges: [] as Range[]
+          ranges: ranges
         };
       default:
         return basePayload;

@@ -99,7 +99,8 @@ export class ConfigManager {
 
       return config as ObjIdConfig;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      // Check if it's a file not found error
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
         return null;
       }
       throw new ConfigError(

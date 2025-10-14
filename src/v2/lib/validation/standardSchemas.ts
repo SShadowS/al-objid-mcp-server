@@ -76,3 +76,17 @@ export const newsRssSchema = z.object({
 });
 
 export type NewsRssInput = z.infer<typeof newsRssSchema>;
+
+// ============================================================================
+// Assignment Tool Schemas
+// ============================================================================
+
+export const assignmentSchema = z.object({
+  action: z.enum(['store', 'remove', 'check']),
+  appPath: z.string().min(1, 'App path is required'),
+  object_type: z.string().min(1, 'Object type is required'),
+  id: z.number().int().positive('ID must be a positive integer'),
+  authKey: z.string().optional(),
+});
+
+export type AssignmentInput = z.infer<typeof assignmentSchema>;

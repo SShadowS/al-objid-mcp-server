@@ -142,3 +142,24 @@ export interface NewsRssResult {
   success?: boolean;
   message?: string;
 }
+
+// ============================================================================
+// Assignment Tool Types
+// ============================================================================
+
+export interface AssignmentParams {
+  action: 'store' | 'remove' | 'check';
+  appPath: string;
+  object_type: string;
+  id: number;
+  authKey?: string;
+}
+
+export interface AssignmentResult {
+  action: 'store' | 'remove' | 'check';
+  success: boolean;
+  object_type: string;
+  id: number;
+  tracked?: boolean;  // For 'check' action
+  message?: string;
+}

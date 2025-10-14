@@ -16,7 +16,8 @@ import {
   PoolTool,
   ConsumptionTool,
   SyncTool,
-  LogTool
+  LogTool,
+  AssignmentTool
 } from './tools/standard';
 import { Logger } from './lib/utils/logger';
 import { ConfigManager } from './lib/config/ConfigManager';
@@ -71,6 +72,7 @@ export class MCPServer {
       this.registerTool(new ConsumptionTool());
       this.registerTool(new SyncTool());
       this.registerTool(new LogTool());
+      this.registerTool(new AssignmentTool());
     }
 
     this.logger.info(`Loaded ${this.tools.size} tools`);
