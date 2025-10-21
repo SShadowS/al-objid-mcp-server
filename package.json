@@ -1,6 +1,6 @@
 {
   "name": "@sshadows/objid-mcp",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "MCP server for AL Object ID Ninja - Provides intelligent object ID management for Microsoft Dynamics 365 Business Central development",
   "main": "dist/v2/server.js",
   "bin": {
