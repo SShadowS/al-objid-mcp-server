@@ -4,14 +4,15 @@
 
 import { z } from 'zod';
 import { AuthorizationAction, ConfigAction, AllocateMode } from '../types/tools/lite';
+import { coercedBoolean, coercedArray, coercedPositiveInteger } from './coercion';
 
 // ============================================================================
 // Common schemas
 // ============================================================================
 
 const rangeSchema = z.object({
-  from: z.number().int().positive(),
-  to: z.number().int().positive(),
+  from: coercedPositiveInteger(),
+  to: coercedPositiveInteger(),
 }).refine(data => data.from <= data.to, {
   message: 'Range "from" must be less than or equal to "to"',
 });
@@ -49,7 +50,7 @@ export const authorizationSchema = z.object({
     z.nativeEnum(AuthorizationAction),
   ]),
   appPath: z.string().min(1, 'App path is required'),
-  interactive: z.boolean().optional().default(true),
+  interactive: coercedBoolean().optional().default(true),
 });
 
 // ============================================================================
@@ -75,7 +76,7 @@ export const configSchema = z.object({
   appPath: z.string().min(1, 'App path is required'),
   keys: z.array(z.string()).optional(),
   patch: objIdConfigPatchSchema.optional(),
-  merge: z.boolean().optional().default(true),
+  merge: coercedBoolean().optional().default(true),
   schema_version: z.string().optional(),
 });
 
@@ -98,13 +99,13 @@ export const allocateIdSchema = z.object({
   ]),
   appPath: z.string().min(1, 'App path is required'),
   object_type: z.union([alObjectTypeSchema, z.string()]),
-  count: z.number().int().positive().optional().default(1),
+  count: coercedPositiveInteger().optional().default(1),
   pool_id: z.string().optional(),
   preferred_range: rangeSchema.optional(),
   object_metadata: objectMetadataSchema.optional(),
-  ids: z.array(z.number().int().positive()).optional(),
-  dry_run: z.boolean().optional().default(false),
-  auto_track: z.boolean().optional(),
+  ids: coercedArray(coercedPositiveInteger()).optional(),
+  dry_run: coercedBoolean().optional().default(false),
+  auto_track: coercedBoolean().optional(),
   authKey: z.string().optional(),
 });
 
@@ -118,7 +119,7 @@ export const analyzeWorkspaceSchema = z.object({
   exclude: z.array(z.string()).optional().default(['**/.alpackages/**', '**/.snapshots/**']),
   object_types: z.array(z.union([alObjectTypeSchema, z.string()])).optional(),
   return_level: z.enum(['summary', 'detailed']).optional().default('summary'),
-  detect_collisions: z.boolean().optional().default(true),
-  map_to_pools: z.boolean().optional().default(false),
+  detect_collisions: coercedBoolean().optional().default(true),
+  map_to_pools: coercedBoolean().optional().default(false),
 });
 
