@@ -127,9 +127,9 @@ export class SyncTool extends BaseTool<SyncParams, SyncResult> {
 
     // Check for conflicts
     const config = await this.config.readConfig(params.appPath);
-    if (config.idRanges) {
+    if (config.idRanges || config.objectRanges) {
       for (const { type, id } of toAdd) {
-        const ranges = config.idRanges[type];
+        const ranges = (config.objectRanges && config.objectRanges[type]) || config.idRanges;
         if (ranges) {
           const inRange = ranges.some((r: any) => id >= r.from && id <= r.to);
           if (!inRange) {

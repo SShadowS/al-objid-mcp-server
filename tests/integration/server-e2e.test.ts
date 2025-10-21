@@ -34,7 +34,6 @@ describe('MCP Server E2E Tests', () => {
     fs.writeFileSync(path.join(testApp1, 'app.json'), JSON.stringify(app1Json, null, 2));
 
     const objidConfig1 = {
-      objectRanges: [{ from: 50000, to: 50099, description: 'App1 Range' }],
       bcLicense: [],
       idRanges: [{ from: 50000, to: 50099 }],
       nextId: 50010,
@@ -66,7 +65,6 @@ describe('MCP Server E2E Tests', () => {
     fs.writeFileSync(path.join(testApp2, 'app.json'), JSON.stringify(app2Json, null, 2));
 
     const objidConfig2 = {
-      objectRanges: [{ from: 60000, to: 60099, description: 'App2 Range' }],
       idRanges: [{ from: 60000, to: 60099 }],
       nextId: 60000
     };

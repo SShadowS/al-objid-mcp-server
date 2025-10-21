@@ -58,7 +58,8 @@ export const authorizationSchema = z.object({
 // ============================================================================
 
 const objIdConfigPatchSchema = z.object({
-  idRanges: z.record(z.string(), z.array(rangeSchema)).optional(),
+  idRanges: z.array(rangeSchema).optional(),
+  objectRanges: z.record(z.string(), z.array(rangeSchema)).optional(),
   objectNamePrefix: z.string().optional(),
   objectNameSuffix: z.string().optional(),
   bcLicense: z.string().optional(),

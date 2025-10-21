@@ -61,7 +61,7 @@ describe('AllocateIdTool', () => {
         logLevel: 'info'
       }),
       readObjIdConfig: jest.fn().mockResolvedValue({
-        idRanges: {
+        objectRanges: {
           table: [{ from: 1000, to: 1999 }],
           page: [{ from: 2000, to: 2999 }]
         }
@@ -114,7 +114,7 @@ describe('AllocateIdTool', () => {
 
     it('should respect preferred range', async () => {
       mockConfigInstance.readObjIdConfig.mockResolvedValue({
-        idRanges: {
+        objectRanges: {
           table: [
             { from: 1000, to: 1099 },
             { from: 2000, to: 2099 }
@@ -449,7 +449,7 @@ describe('AllocateIdTool', () => {
 
   it('should throw when no ranges defined for object type', async () => {
     mockConfigInstance.readObjIdConfig.mockResolvedValue({
-      idRanges: {
+      objectRanges: {
         page: [{ from: 2000, to: 2999 }]
       }
     });

@@ -60,7 +60,7 @@ export class AllocateIdTool extends BaseTool<AllocateIdParams, AllocateIdResult>
 
     // Validate object type has ranges
     const objectType = params.object_type.toLowerCase();
-    const ranges = config.idRanges ? config.idRanges[objectType] : undefined;
+    const ranges = (config.objectRanges && config.objectRanges[objectType]) || config.idRanges;
     if (!ranges || ranges.length === 0) {
       throw this.createError(
         ErrorCode.NO_RANGES_DEFINED,

@@ -130,8 +130,8 @@ describe('MCP Server V2 E2E Tests', () => {
       expect(result.action).toBe('read');
       expect(result.exists).toBe(true);
       expect(result.config).toBeDefined();
-      expect(result.config?.idRanges).toBeDefined();
-      expect(result.config?.idRanges?.table).toBeDefined();
+      expect(result.config?.objectRanges).toBeDefined();
+      expect(result.config?.objectRanges?.table).toBeDefined();
     });
 
     it('should validate configuration', async () => {

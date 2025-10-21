@@ -153,26 +153,57 @@ export class ConfigManager {
     }
 
     const objConfig = config as ObjIdConfig;
-    // Validate required fields
-    if (!objConfig.idRanges || typeof objConfig.idRanges !== 'object') {
-      throw new ConfigError(ErrorCode.CONFIG_INVALID, 'idRanges is required');
+
+    // Migration: Auto-fix legacy shape where idRanges was incorrectly used as objectRanges
+    if (objConfig.idRanges && !Array.isArray(objConfig.idRanges) && !objConfig.objectRanges) {
+      // Legacy buggy shape: treat as objectRanges and reset idRanges
+      objConfig.objectRanges = objConfig.idRanges as unknown as Record<string, Array<{ from: number; to: number }>>;
+      objConfig.idRanges = [];
     }
 
-    // Validate ranges
-    for (const [type, ranges] of Object.entries(objConfig.idRanges)) {
-      if (!Array.isArray(ranges)) {
-        throw new ConfigError(ErrorCode.CONFIG_INVALID, `Ranges for ${type} must be an array`);
-      }
+    // Validate idRanges if present (must be array)
+    if (objConfig.idRanges && !Array.isArray(objConfig.idRanges)) {
+      throw new ConfigError(ErrorCode.CONFIG_INVALID, 'idRanges must be an array');
+    }
 
+    // Helper to validate individual ranges
+    const validateRanges = (label: string, ranges: any[]) => {
       for (const range of ranges) {
-        if (!range.from || !range.to || typeof range.from !== 'number' || typeof range.to !== 'number') {
-          throw new ConfigError(ErrorCode.CONFIG_INVALID, `Invalid range in ${type}`);
+        if (!range || typeof range.from !== 'number' || typeof range.to !== 'number') {
+          throw new ConfigError(ErrorCode.CONFIG_INVALID, `Invalid range in ${label}`);
         }
-
         if (range.from > range.to) {
-          throw new ConfigError(ErrorCode.CONFIG_INVALID, `Invalid range in ${type}: from > to`);
+          throw new ConfigError(ErrorCode.CONFIG_INVALID, `Invalid range in ${label}: from > to`);
         }
       }
+    };
+
+    // Validate idRanges array if present
+    if (Array.isArray(objConfig.idRanges)) {
+      validateRanges('idRanges', objConfig.idRanges);
+    }
+
+    // Validate objectRanges if present (must be object with array values)
+    if (objConfig.objectRanges && typeof objConfig.objectRanges === 'object') {
+      for (const [type, ranges] of Object.entries(objConfig.objectRanges)) {
+        if (!Array.isArray(ranges)) {
+          throw new ConfigError(ErrorCode.CONFIG_INVALID, `Ranges for ${type} must be an array`);
+        }
+        validateRanges(type, ranges);
+      }
+    }
+
+    // Require at least one of idRanges or objectRanges with valid ranges
+    const hasAnyRanges =
+      (Array.isArray(objConfig.idRanges) && objConfig.idRanges.length > 0) ||
+      (objConfig.objectRanges &&
+        Object.values(objConfig.objectRanges).some(r => Array.isArray(r) && r.length > 0));
+
+    if (!hasAnyRanges) {
+      throw new ConfigError(
+        ErrorCode.CONFIG_INVALID,
+        'No ID ranges defined. Provide idRanges (array) or objectRanges (per-type object).'
+      );
     }
 
     // Validate optional fields
@@ -218,9 +249,14 @@ export class ConfigManager {
   private mergeConfigs(existing: ObjIdConfig, update: Partial<ObjIdConfig>): ObjIdConfig {
     const merged = { ...existing };
 
-    // Merge idRanges
+    // Merge idRanges (array - replace directly)
     if (update.idRanges) {
-      merged.idRanges = { ...existing.idRanges, ...update.idRanges };
+      merged.idRanges = update.idRanges;
+    }
+
+    // Merge objectRanges (object - shallow merge)
+    if (update.objectRanges) {
+      merged.objectRanges = { ...(existing.objectRanges || {}), ...update.objectRanges };
     }
 
     // Merge other fields
@@ -286,7 +322,8 @@ export class ConfigManager {
     if (!config) {
       // Return default config if not found
       return {
-        idRanges: {}
+        idRanges: [],
+        objectRanges: {}
       };
     }
     return config;

@@ -30,7 +30,7 @@ describe('ConsumptionTool', () => {
         backendApiKey: 'test-key'
       }),
       readConfig: jest.fn().mockResolvedValue({
-        idRanges: {
+        objectRanges: {
           table: [{ from: 50000, to: 50099 }],
           page: [{ from: 50000, to: 50099 }]
         }

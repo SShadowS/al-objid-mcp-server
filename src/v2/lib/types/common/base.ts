@@ -61,7 +61,8 @@ export interface Range {
  * Object ID configuration structure
  */
 export interface ObjIdConfig {
-  idRanges?: {
+  idRanges?: Range[];
+  objectRanges?: {
     [objectType: string]: Range[];
   };
   objectNamePrefix?: string;

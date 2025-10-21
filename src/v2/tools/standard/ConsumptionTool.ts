@@ -89,16 +89,16 @@ export class ConsumptionTool extends BaseTool<ConsumptionParams, ConsumptionResu
         const config = await this.config.readConfig(params.appPath);
         result.available = {};
 
-        // Calculate available IDs for each type
-        if (config.idRanges) {
-          for (const [type, ranges] of Object.entries(config.idRanges)) {
+        // Calculate available IDs for each type using objectRanges
+        if (config.objectRanges) {
+          for (const [type, ranges] of Object.entries(config.objectRanges)) {
             const consumed = (backendData as any)[type] || [];
             const consumedSet = new Set(
               Array.isArray(consumed) ? consumed.map((id: any) => typeof id === 'number' ? id : id.id) : []
             );
 
             result.available[type] = [];
-            for (const range of (ranges as any[])) {
+            for (const range of ranges) {
               for (let id = range.from; id <= range.to; id++) {
                 if (!consumedSet.has(id)) {
                   result.available[type].push(id);

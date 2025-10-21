@@ -53,7 +53,7 @@ export async function createTestApp(basePath: string, appName: string): Promise<
 
   // Create .objidconfig
   const objIdConfig = {
-    idRanges: {
+    objectRanges: {
       table: [{ from: 50000, to: 50019 }],
       page: [{ from: 50020, to: 50039 }],
       codeunit: [{ from: 50040, to: 50059 }],

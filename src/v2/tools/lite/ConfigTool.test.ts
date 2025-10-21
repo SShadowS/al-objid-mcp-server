@@ -68,7 +68,7 @@ describe('ConfigTool', () => {
   describe('read action', () => {
     it('should read existing config', async () => {
       const mockConfig = {
-        idRanges: {
+        objectRanges: {
           table: [{ from: 1000, to: 1999 }],
           page: [{ from: 2000, to: 2999 }]
         },
@@ -92,7 +92,7 @@ describe('ConfigTool', () => {
 
     it('should filter by keys when specified', async () => {
       const mockConfig = {
-        idRanges: {
+        objectRanges: {
           table: [{ from: 1000, to: 1999 }]
         },
         objectNamePrefix: 'TEST',
@@ -104,11 +104,11 @@ describe('ConfigTool', () => {
       const result = await tool.execute({
         action: 'read',
         appPath: '/test/path',
-        keys: ['idRanges']
+        keys: ['objectRanges']
       });
 
       expect(result.config).toEqual({
-        idRanges: {
+        objectRanges: {
           table: [{ from: 1000, to: 1999 }]
         }
       });
@@ -136,7 +136,7 @@ describe('ConfigTool', () => {
       };
 
       mockConfigInstance.readObjIdConfig.mockResolvedValue({
-        idRanges: { table: [{ from: 1000, to: 1999 }] },
+        objectRanges: { table: [{ from: 1000, to: 1999 }] },
         objectNamePrefix: 'NEW'
       });
 
@@ -168,7 +168,7 @@ describe('ConfigTool', () => {
   describe('validate action', () => {
     it('should validate valid config', async () => {
       const mockConfig = {
-        idRanges: {
+        objectRanges: {
           table: [{ from: 1000, to: 1999 }],
           page: [{ from: 2000, to: 2999 }]
         },
@@ -190,7 +190,7 @@ describe('ConfigTool', () => {
 
     it('should detect missing ID ranges', async () => {
       mockConfigInstance.readObjIdConfig.mockResolvedValue({
-        idRanges: {}
+        objectRanges: {}
       });
 
       const result = await tool.execute({
@@ -200,12 +200,12 @@ describe('ConfigTool', () => {
 
       expect(result.valid).toBe(false);
       expect(result.validation).toBeDefined();
-      expect(result.validation!.some(v => v.message === 'No ID ranges defined')).toBe(true);
+      expect(result.validation!.some(v => v.message === 'No ID ranges defined (need idRanges array or objectRanges object)')).toBe(true);
     });
 
     it('should detect overlapping ranges', async () => {
       mockConfigInstance.readObjIdConfig.mockResolvedValue({
-        idRanges: {
+        objectRanges: {
           table: [
             { from: 1000, to: 1999 },
             { from: 1500, to: 2500 }

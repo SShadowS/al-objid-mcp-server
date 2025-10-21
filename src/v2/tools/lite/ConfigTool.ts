@@ -164,21 +164,24 @@ export class ConfigTool extends BaseTool<ConfigParams, ConfigResult> {
         severity: 'error' | 'warning' | 'info';
       }> = [];
 
-      // Check for required fields
-      if (!config.idRanges || Object.keys(config.idRanges).length === 0) {
+      // Check for required fields - need either idRanges (array) or objectRanges (object)
+      const hasIdRanges = Array.isArray(config.idRanges) && config.idRanges.length > 0;
+      const hasObjectRanges = config.objectRanges && Object.keys(config.objectRanges).length > 0;
+
+      if (!hasIdRanges && !hasObjectRanges) {
         validation.push({
           path: 'idRanges',
-          message: 'No ID ranges defined',
+          message: 'No ID ranges defined (need idRanges array or objectRanges object)',
           severity: 'error'
         });
       }
 
-      // Validate ranges
-      if (config.idRanges) {
-        for (const [type, ranges] of Object.entries(config.idRanges)) {
+      // Validate objectRanges
+      if (config.objectRanges) {
+        for (const [type, ranges] of Object.entries(config.objectRanges)) {
           if (!Array.isArray(ranges) || ranges.length === 0) {
             validation.push({
-              path: `idRanges.${type}`,
+              path: `objectRanges.${type}`,
               message: 'No ranges defined for type',
               severity: 'warning'
             });
@@ -192,7 +195,7 @@ export class ConfigTool extends BaseTool<ConfigParams, ConfigResult> {
               const r2 = ranges[j];
               if (r1.from <= r2.to && r2.from <= r1.to) {
                 validation.push({
-                  path: `idRanges.${type}`,
+                  path: `objectRanges.${type}`,
                   message: `Overlapping ranges detected: [${r1.from}-${r1.to}] and [${r2.from}-${r2.to}]`,
                   severity: 'error'
                 });
